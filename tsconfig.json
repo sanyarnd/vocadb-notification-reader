@@ -1,0 +1,45 @@
+{
+  "include": [
+    "src/main/typescript/**/*.ts",
+    "src/main/typescript/**/*.tsx",
+    "src/main/typescript/**/*.vue"
+  ],
+  "exclude": ["node_modules"],
+
+  "compilerOptions": {
+    "target": "ES2016",
+    "module": "esnext",
+    "types": ["webpack-env"],
+
+    "baseUrl": "./",
+    "outDir": "target/classes/static/assets",
+    "paths": {
+      "@/*": ["src/main/typescript/*"]
+    },
+
+    "jsx": "preserve",
+    "moduleResolution": "node",
+
+    "strict": true,
+    "alwaysStrict": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictPropertyInitialization": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "suppressImplicitAnyIndexErrors": true,
+
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "removeComments": false,
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "importHelpers": true,
+
+    "allowJs": true,
+    "checkJs": true
+  }
+}

@@ -1,0 +1,14 @@
+${AnsiColor.BRIGHT_GREEN} _   _                     ______ ______       _   _  _     __
+${AnsiColor.BRIGHT_GREEN}| | | |                    |  _  \| ___ \     | \ | || |   / _|
+${AnsiColor.BRIGHT_GREEN}| | | |  ___    ___   __ _ | | | || |_/ /     |  \| || |_ | |_
+${AnsiColor.BRIGHT_GREEN}| | | | / _ \  / __| / _` || | | || ___ \     | . ` || __||  _|
+${AnsiColor.BRIGHT_GREEN}\ \_/ /| (_) || (__ | (_| || |/ / | |_/ /     | |\  || |_ | |
+${AnsiColor.BRIGHT_GREEN} \___/  \___/  \___| \__,_||___/  \____/      \_| \_/ \__||_|
+${AnsiColor.BRIGHT_GREEN}           ______                   _
+${AnsiColor.BRIGHT_GREEN}           | ___ \                 | |
+${AnsiColor.BRIGHT_GREEN}           | |_/ /  ___   __ _   __| |  ___  _ __
+${AnsiColor.BRIGHT_GREEN}           |    /  / _ \ / _` | / _` | / _ \| '__|
+${AnsiColor.BRIGHT_GREEN}           | |\ \ |  __/| (_| || (_| ||  __/| |
+${AnsiColor.BRIGHT_GREEN}           \_| \_| \___| \__,_| \__,_| \___||_|
+${AnsiColor.BRIGHT_CYAN}
+Spring Boot ${spring-boot.version}${AnsiColor.DEFAULT}
