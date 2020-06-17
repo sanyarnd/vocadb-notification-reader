@@ -1,0 +1,15 @@
+package vocadb.notification.reader.client.model.user;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+@Getter
+@RequiredArgsConstructor
+public class UserKnownLanguageContract {
+    @JsonProperty
+    private final @Nullable String cultureCode;
+    @JsonProperty
+    private final @Nullable Proficiency proficiency;
+}
