@@ -49,6 +49,8 @@ public class SecurityConfiguration {
                 .authorizeExchange(e -> {
                     e.pathMatchers(HttpMethod.OPTIONS, "/**").permitAll();
                     e.pathMatchers("/login", "/login/**").permitAll();
+                    e.pathMatchers("/webjars/**").permitAll();
+                    e.pathMatchers("/swagger-ui*", "/v3/**").permitAll();
                     e.pathMatchers("/**").hasAuthority(Authority.ROLE_USER);
                     e.anyExchange().authenticated();
                 })

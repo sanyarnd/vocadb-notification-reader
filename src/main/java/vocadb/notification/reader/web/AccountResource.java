@@ -1,5 +1,6 @@
 package vocadb.notification.reader.web;
 
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -9,7 +10,7 @@ import vocadb.notification.reader.service.security.VocaDbPrincipal;
 import vocadb.notification.reader.web.dto.AccountDto;
 
 @RestController
-@RequestMapping("api/v1/account")
+@RequestMapping(value = "api/v1/account", produces = MediaType.APPLICATION_JSON_VALUE)
 public class AccountResource {
     @GetMapping
     public Mono<AccountDto> currentUser(@AuthenticationPrincipal Mono<VocaDbPrincipal> principal) {

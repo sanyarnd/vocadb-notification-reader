@@ -1,8 +1,8 @@
 package vocadb.notification.reader.configuration;
 
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.checkerframework.checker.nullness.NullnessUtil;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.codec.Hints;
 import org.springframework.http.HttpStatus;
@@ -37,7 +37,7 @@ class ProblemAuthenticationFailureHandler implements ServerAuthenticationFailure
         }
 
         Problem problem = exceptionMapper(exception);
-        int status = NullnessUtil.castNonNull(problem.getStatus()).getStatusCode();
+        int status = Objects.requireNonNull(problem.getStatus()).getStatusCode();
 
         response.setStatusCode(HttpStatus.valueOf(status));
         return toJson(problem, webFilterExchange.getExchange());
@@ -56,18 +56,18 @@ class ProblemAuthenticationFailureHandler implements ServerAuthenticationFailure
     }
 
     private Problem exceptionMapper(AuthenticationException exception) {
-        Problem problem;
+        Status status = Status.UNAUTHORIZED;
+        String message = null;
+
         if (exception instanceof AuthenticationServiceException) {
-            problem = Problem.valueOf(Status.INTERNAL_SERVER_ERROR);
+            status = Status.INTERNAL_SERVER_ERROR;
         } else if (exception instanceof AccountStatusException) {
-            String message = exception.getMessage();
-            problem = Problem.valueOf(Status.FORBIDDEN, message == null ? "User is either disabled or has expired credentials" : message);
+            status = Status.FORBIDDEN;
+            message = Objects.requireNonNullElse(exception.getMessage(), "User is either disabled or has expired credentials");
         } else if (exception instanceof BadCredentialsException) {
-            problem = Problem.valueOf(Status.UNAUTHORIZED, "Invalid credentials");
-        } else {
-            problem = Problem.valueOf(Status.UNAUTHORIZED);
+            message = Objects.requireNonNullElse(exception.getMessage(), "Invalid credentials");
         }
 
-        return problem;
+        return Problem.valueOf(status, message);
     }
 }

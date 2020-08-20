@@ -10,7 +10,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
@@ -43,27 +42,30 @@ abstract class Api {
 
     protected String toQuery(List<Pair<String, ?>> query) {
         return query.stream()
-                .filter(e -> e.getRight() != null)
+                .filter(e -> {
+                    Object value = e.getRight();
+                    // skip if no value present or parameter array is empty
+                    return value != null && !(value instanceof Collection<?> && ((Collection<?>) value).size() == 0);
+                })
                 .map(e -> {
                     String key = e.getLeft();
-                    Object value = Objects.requireNonNull(e.getRight());
+                    Object value = e.getRight();
 
+                    // special case for collections:
+                    // if value is a collection, then convert every element to string and join with ','
+                    // otherwise simply convert the value
+                    // jackson is required for proper enum handling
+                    String stringValue;
                     if (value instanceof Collection<?>) {
-                        return toQueryString(key, (Collection<?>) value);
+                        stringValue = ((Collection<?>) value).stream()
+                                .map(e1 -> objectMapper.convertValue(e1, String.class))
+                                .collect(Collectors.joining(","));
                     } else {
-                        String stringValue = objectMapper.convertValue(value, String.class);
-                        return String.format("%s=%s", key, stringValue);
+                        stringValue = objectMapper.convertValue(value, String.class);
                     }
+                    return String.format("%s=%s", key, stringValue);
 
                 })
-                .collect(Collectors.joining("&"));
-    }
-
-    protected String toQueryString(String key, Collection<?> collection) {
-        return collection.stream()
-                .map(Objects::nonNull)
-                .map(e -> objectMapper.convertValue(e, String.class))
-                .map(e -> String.format("%s=%s", key, e))
                 .collect(Collectors.joining("&"));
     }
 
