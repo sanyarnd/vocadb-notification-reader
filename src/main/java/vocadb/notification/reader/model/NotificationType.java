@@ -9,19 +9,27 @@ public enum NotificationType {
     UNKNOWN;
 
     public static NotificationType of(String code) {
+        NotificationType result;
         switch (code) {
             case "S":
-                return SONG;
+                result = SONG;
+                break;
             case "Ar":
-                return ARTIST;
+                result = ARTIST;
+                break;
             case "E":
-                return EVENT;
+                result = EVENT;
+                break;
             case "Al":
-                return ALBUM;
+                result = ALBUM;
+                break;
             case "R":
-                return REPORT;
+                result = REPORT;
+                break;
             default:
-                return UNKNOWN;
+                result = UNKNOWN;
+                break;
         }
+        return result;
     }
 }

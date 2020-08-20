@@ -29,7 +29,8 @@ public class VocaDbAuthenticationProvider implements ReactiveAuthenticationManag
                         ? Mono.fromCompletionStage(client.userApi().getCurrentUser(Collections.emptyList()))
                         : Mono.error(() -> new BadCredentialsException("Bad credentials")))
                 .map(u -> {
-                    List<SimpleGrantedAuthority> userAuthorities = List.of(new SimpleGrantedAuthority(Authority.ROLE_USER));
+                    List<SimpleGrantedAuthority> userAuthorities =
+                            List.of(new SimpleGrantedAuthority(Authority.ROLE_USER));
                     VocaDbPrincipal p = new VocaDbPrincipal(u, List.copyOf(client.cookies()), userAuthorities);
                     return new UsernamePasswordAuthenticationToken(p, p.getPassword(), p.getAuthorities());
                 });

@@ -1,5 +1,6 @@
 package vocadb.notification.reader.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +25,7 @@ public class SecurityConfiguration {
     private final ServerAuthenticationFailureHandler problemAuthenticationHandler;
 
     @Bean
+    @SuppressWarnings("MultipleStringLiterals")
     public SecurityWebFilterChain securityWebFilterChain(final ServerHttpSecurity http) {
         return http.exceptionHandling(it -> {
             it.authenticationEntryPoint(problemSupport);
@@ -57,6 +59,7 @@ public class SecurityConfiguration {
                 .build();
     }
 
+    @SuppressFBWarnings("UP_UNUSED_PARAMETER")
     private Mono<Void> successHandler(WebFilterExchange webFilterExchange, Authentication authentication) {
         webFilterExchange.getExchange().getResponse().setStatusCode(HttpStatus.OK);
         return Mono.empty();

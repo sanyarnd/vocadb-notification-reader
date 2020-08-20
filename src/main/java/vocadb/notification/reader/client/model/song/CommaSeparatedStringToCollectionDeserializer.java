@@ -8,8 +8,6 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-;
-
 class CommaSeparatedStringToCollectionDeserializer extends JsonDeserializer<Collection<String>> {
     @Override
     public Collection<String> deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {

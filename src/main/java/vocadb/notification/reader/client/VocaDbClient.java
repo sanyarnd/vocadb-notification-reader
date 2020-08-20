@@ -84,8 +84,8 @@ public class VocaDbClient {
     }
 
     public boolean isAuthenticated() {
-        List<HttpCookie> cookies = cookieManager.getCookieStore().get(baseUrl);
-        return !cookies.isEmpty() && cookies.stream().noneMatch(HttpCookie::hasExpired);
+        List<HttpCookie> rawCookies = cookieManager.getCookieStore().get(baseUrl);
+        return !rawCookies.isEmpty() && rawCookies.stream().noneMatch(HttpCookie::hasExpired);
     }
 
     public static class Builder {
@@ -93,6 +93,7 @@ public class VocaDbClient {
         private URI baseUrl = URI.create("https://vocadb.net");
 
         private ProxySelector proxySelector = HttpClient.Builder.NO_PROXY;
+        @SuppressWarnings("MagicNumber")
         private Duration connectTimeout = Duration.ofSeconds(30);
         private Redirect followRedirects = Redirect.NEVER;
 

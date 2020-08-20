@@ -27,6 +27,7 @@ public class StringToEnumConverterFactory implements ConverterFactory<String, En
         private final Class<T> enumType;
         private final ObjectMapper objectMapper;
 
+        @SuppressWarnings("ReturnCount")
         public T convert(String source) {
             if (source.isEmpty()) {
                 return null;

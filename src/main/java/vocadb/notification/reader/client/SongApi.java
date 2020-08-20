@@ -15,6 +15,7 @@ import vocadb.notification.reader.client.model.song.SongForApiContract;
 import vocadb.notification.reader.client.query.LanguagePreference;
 import vocadb.notification.reader.client.query.OptionalFields;
 
+@SuppressWarnings("MultipleStringLiterals")
 public class SongApi extends Api {
     public SongApi(HttpClient client, URI baseUrl, ObjectMapper objectMapper) {
         super(client, objectMapper, baseUrl);
@@ -38,16 +39,19 @@ public class SongApi extends Api {
                 Pair.of("lang", lang)
         );
 
-        HttpRequest request = HttpUtils.getRequest(baseUrl.resolve(String.format("/api/songs/%d?%s", id, toQuery(params))));
+        HttpRequest request =
+                HttpUtils.getRequest(baseUrl.resolve(String.format("/api/songs/%d?%s", id, toQuery(params))));
         return sendAsync(request, new TypeReference<>() {});
     }
 
     /**
      * Gets a song by PV.
      *
-     * @param pvService PV service (required). Possible values are NicoNicoDouga, Youtube, SoundCloud, Vimeo, Piapro, Bilibili.
+     * @param pvService PV service (required).
+     *                  Possible values are NicoNicoDouga, Youtube, SoundCloud, Vimeo, Piapro, Bilibili.
      * @param pvId      PV Id (required). For example sm123456.
-     * @param fields    List of optional fields. Possible values are Albums, Artists, Names, PVs, Tags, ThumbUrl, WebLinks. (optional)
+     * @param fields    List of optional fields.
+     *                  Possible values are Albums, Artists, Names, PVs, Tags, ThumbUrl, WebLinks. (optional)
      * @param lang      Content language preference. (optional)
      */
 
@@ -64,7 +68,8 @@ public class SongApi extends Api {
                 Pair.of("lang", lang)
         );
 
-        HttpRequest request = HttpUtils.getRequest(baseUrl.resolve(String.format("/api/songs/byPv?%s", toQuery(params))));
+        HttpRequest request =
+                HttpUtils.getRequest(baseUrl.resolve(String.format("/api/songs/byPv?%s", toQuery(params))));
         return sendAsync(request, new TypeReference<>() {});
     }
 
@@ -83,7 +88,8 @@ public class SongApi extends Api {
                 Pair.of("language", language),
                 Pair.of("fields", fields)
         );
-        HttpRequest request = HttpUtils.getRequest(baseUrl.resolve(String.format("/api/songs/highlighted?%s", toQuery(params))));
+        HttpRequest request =
+                HttpUtils.getRequest(baseUrl.resolve(String.format("/api/songs/highlighted?%s", toQuery(params))));
         return sendAsync(request, new TypeReference<>() {});
     }
 }

@@ -33,11 +33,6 @@ import vocadb.notification.reader.model.notification.ReportNotification;
 import vocadb.notification.reader.model.notification.SongNotification;
 import vocadb.notification.reader.model.notification.UnknownNotification;
 import static java.util.Collections.emptyList;
-import static vocadb.notification.reader.model.NotificationType.ALBUM;
-import static vocadb.notification.reader.model.NotificationType.ARTIST;
-import static vocadb.notification.reader.model.NotificationType.EVENT;
-import static vocadb.notification.reader.model.NotificationType.REPORT;
-import static vocadb.notification.reader.model.NotificationType.SONG;
 import static vocadb.notification.reader.model.NotificationType.UNKNOWN;
 
 @Component
@@ -70,7 +65,9 @@ public class NotificationService {
                 .toCompletableFuture()
                 .thenApply(r -> {
                     Integer totalCount = NullnessUtil.castNonNull(r.totalCount());
-                    if (r.items() == null) return Pair.of(emptyList(), 0);
+                    if (r.items() == null) {
+                        return Pair.of(emptyList(), 0);
+                    }
 
                     List<Notification> msgStream = Stream.ofNullable(r.items()).flatMap(Collection::stream)
                             .map(msg -> client.userApi().getMessage(msg.id()).toCompletableFuture())
@@ -96,25 +93,37 @@ public class NotificationService {
             String body = originalBody == null ? "<empty body>" : originalBody;
 
             CompletableFuture<? extends Notification> notification;
-            if (type == SONG) {
-                notification = createSongNotification(
-                        client,
-                        msg.id(),
-                        msg.subject(),
-                        body,
-                        payloadId,
-                        languagePreference
-                );
-            } else if (type == ARTIST) {
-                notification = CompletableFuture.completedFuture(new ArtistNotification(msg.id(), msg.subject(), body));
-            } else if (type == EVENT) {
-                notification = CompletableFuture.completedFuture(new EventNotification(msg.id(), msg.subject(), body));
-            } else if (type == ALBUM) {
-                notification = CompletableFuture.completedFuture(new AlbumNotification(msg.id(), msg.subject(), body));
-            } else if (type == REPORT) {
-                notification = CompletableFuture.completedFuture(new ReportNotification(msg.id(), msg.subject(), body));
-            } else {
-                notification = CompletableFuture.completedFuture(new UnknownNotification(msg.id(), msg.subject(), body));
+            switch (type) {
+                case SONG:
+                    notification = createSongNotification(
+                            client,
+                            msg.id(),
+                            msg.subject(),
+                            body,
+                            payloadId,
+                            languagePreference
+                    );
+                    break;
+                case ARTIST:
+                    notification =
+                            CompletableFuture.completedFuture(new ArtistNotification(msg.id(), msg.subject(), body));
+                    break;
+                case EVENT:
+                    notification =
+                            CompletableFuture.completedFuture(new EventNotification(msg.id(), msg.subject(), body));
+                    break;
+                case ALBUM:
+                    notification =
+                            CompletableFuture.completedFuture(new AlbumNotification(msg.id(), msg.subject(), body));
+                    break;
+                case REPORT:
+                    notification =
+                            CompletableFuture.completedFuture(new ReportNotification(msg.id(), msg.subject(), body));
+                    break;
+                default:
+                    notification =
+                            CompletableFuture.completedFuture(new UnknownNotification(msg.id(), msg.subject(), body));
+                    break;
             }
 
             return notification;
@@ -152,22 +161,41 @@ public class NotificationService {
                                     .thenComparing(pv -> pv.pvType().name()))
                             .collect(Collectors.toList());
 
-                    return new SongNotification(id, subject, body, type, songId, songType, tags, pvs, title, artist, publishDate);
+                    return new SongNotification(
+                            id,
+                            subject,
+                            body,
+                            type,
+                            songId,
+                            songType,
+                            tags,
+                            pvs,
+                            title,
+                            artist,
+                            publishDate
+                    );
                 });
     }
 
+    @SuppressWarnings("ReturnCount")
     private Pair<NotificationType, Integer> detectNotificationType(UserMessageContract notification) {
         Pair<NotificationType, Integer> unknown = Pair.of(UNKNOWN, 0);
         String body = notification.body();
-        if (body == null) return unknown; // must never happen, because body is fetched
+        if (body == null) {
+            return unknown; // must never happen, because body is fetched
+        }
 
         Pattern pattern = Pattern.compile(".*\\(https?://vocadb.net/(\\w+)/(\\d+)\\).*");
         Matcher matcher = pattern.matcher(body);
-        if (!matcher.find()) return unknown;
+        if (!matcher.find()) {
+            return unknown;
+        }
 
         String typeStr = NullnessUtil.castNonNull(matcher.group(1));
         NotificationType type = NotificationType.of(typeStr);
-        if (type == UNKNOWN) return unknown;
+        if (type == UNKNOWN) {
+            return unknown;
+        }
 
         String id = NullnessUtil.castNonNull(matcher.group(2));
         int matchedId = Integer.parseInt(id);

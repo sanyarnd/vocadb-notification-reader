@@ -29,6 +29,7 @@ public class SongNotification extends Notification {
     @JsonProperty
     private final @Nullable LocalDateTime releaseDate;
 
+    @SuppressWarnings("ParameterNumber")
     public SongNotification(
             Integer id,
             String originalSubject,

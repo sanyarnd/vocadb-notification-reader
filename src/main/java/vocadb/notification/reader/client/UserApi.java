@@ -16,6 +16,7 @@ import vocadb.notification.reader.client.model.user.UserForApiContract;
 import vocadb.notification.reader.client.model.user.UserMessageContract;
 import vocadb.notification.reader.client.query.OptionalFields;
 
+@SuppressWarnings("MultipleStringLiterals")
 public class UserApi extends Api {
     public UserApi(HttpClient client, URI baseUrl, ObjectMapper objectMapper) {
         super(client, objectMapper, baseUrl);
@@ -28,18 +29,21 @@ public class UserApi extends Api {
         List<Pair<String, ?>> params = List.of(
                 Pair.of("fields", fields)
         );
-        HttpRequest request = HttpUtils.getRequest(baseUrl.resolve(String.format("/api/users/current?%s", toQuery(params))));
+        HttpRequest request =
+                HttpUtils.getRequest(baseUrl.resolve(String.format("/api/users/current?%s", toQuery(params))));
         return sendAsync(request, new TypeReference<>() {});
     }
 
     /**
      * Gets a list of messages.
      *
-     * @param userId        User ID. Must be the currently logged in user (loading messages for another user is not allowed).
+     * @param userId        User ID. Must be the currently logged in user
+     *                      (loading messages for another user is not allowed).
      * @param inbox         Type of inbox.
      *                      Possible values are Nothing (load all, default), Received, Sent, Notifications. (optional)
      * @param unread        Whether to only load unread messages.
-     *                      Loading unread messages is only possible for received messages and notifications (not sent messages). (optional)
+     *                      Loading unread messages is only possible for
+     *                      received messages and notifications (not sent messages). (optional)
      * @param anotherUserId Filter by id of the other user (either sender or receiver). (optional)
      * @param start         Index of the first entry to be loaded. (optional)
      * @param maxResults    Maximum number of results to be loaded. (optional)
@@ -63,7 +67,9 @@ public class UserApi extends Api {
                 Pair.of("maxResults", maxResults),
                 Pair.of("getTotalCount", getTotalCount)
         );
-        HttpRequest request = HttpUtils.getRequest(baseUrl.resolve(String.format("/api/users/%d/messages?%s", userId, toQuery(params))));
+        HttpRequest request = HttpUtils.getRequest(
+                baseUrl.resolve(String.format("/api/users/%d/messages?%s", userId, toQuery(params)))
+        );
         return sendAsync(request, new TypeReference<>() {});
     }
 
@@ -91,7 +97,9 @@ public class UserApi extends Api {
         List<Pair<String, ?>> params = List.of(
                 Pair.of("messageId", messageIds)
         );
-        HttpRequest request = HttpUtils.deleteRequest(baseUrl.resolve(String.format("/api/users/%d/messages?%s", userId, toQuery(params))));
+        HttpRequest request = HttpUtils.deleteRequest(
+                baseUrl.resolve(String.format("/api/users/%d/messages?%s", userId, toQuery(params)))
+        );
         return sendAsync(request);
     }
 

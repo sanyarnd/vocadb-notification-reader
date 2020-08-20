@@ -2,6 +2,7 @@ package vocadb.notification.reader.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
+import java.util.Map;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -38,9 +39,13 @@ public class PV {
 
     public static PV of(PVContract pv) {
         PVExtendedMetadata em = pv.extendedMetadata();
-        String timestamp = pv.service() == PvService.PIAPRO && em != null
-                ? em.json().get("Timestamp")
-                : null;
+        String timestamp = null;
+        if (pv.service() == PvService.PIAPRO && em != null) {
+            Map<String, String> json = em.json();
+            if (json != null) {
+                timestamp = json.get("Timestamp");
+            }
+        }
 
         return new PV(
                 pv.id(),

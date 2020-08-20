@@ -1,5 +1,6 @@
 package vocadb.notification.reader.configuration;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,8 +32,8 @@ class ProblemAuthenticationFailureHandler implements ServerAuthenticationFailure
     public Mono<Void> onAuthenticationFailure(WebFilterExchange webFilterExchange, AuthenticationException exception) {
         ServerHttpResponse response = webFilterExchange.getExchange().getResponse();
         if (response.isCommitted()) {
-            log.error("Response is already committed. Unable to write exception " +
-                    "${exception.javaClass.simpleName}: ${exception.localizedMessage}");
+            log.error("Response is already committed. Unable to write exception "
+                    + "${exception.javaClass.simpleName}: ${exception.localizedMessage}");
             return Mono.empty();
         }
 
@@ -55,17 +56,19 @@ class ProblemAuthenticationFailureHandler implements ServerAuthenticationFailure
         );
     }
 
+    @SuppressFBWarnings("NP_NULL_PARAM_DEREF")
     private Problem exceptionMapper(AuthenticationException exception) {
         Status status = Status.UNAUTHORIZED;
         String message = null;
 
         if (exception instanceof AuthenticationServiceException) {
             status = Status.INTERNAL_SERVER_ERROR;
+            message = "Internal authentication error";
         } else if (exception instanceof AccountStatusException) {
             status = Status.FORBIDDEN;
-            message = Objects.requireNonNullElse(exception.getMessage(), "User is either disabled or has expired credentials");
+            message = "User is either disabled or has expired credentials";
         } else if (exception instanceof BadCredentialsException) {
-            message = Objects.requireNonNullElse(exception.getMessage(), "Invalid credentials");
+            message = "Invalid credentials";
         }
 
         return Problem.valueOf(status, message);

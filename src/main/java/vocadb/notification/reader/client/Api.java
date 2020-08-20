@@ -9,7 +9,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
@@ -40,12 +39,12 @@ abstract class Api {
                 });
     }
 
-    protected String toQuery(List<Pair<String, ?>> query) {
+    protected String toQuery(Collection<Pair<String, ?>> query) {
         return query.stream()
                 .filter(e -> {
                     Object value = e.getRight();
                     // skip if no value present or parameter array is empty
-                    return value != null && !(value instanceof Collection<?> && ((Collection<?>) value).size() == 0);
+                    return value != null && !(value instanceof Collection<?> && ((Collection<?>) value).isEmpty());
                 })
                 .map(e -> {
                     String key = e.getLeft();
