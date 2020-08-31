@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const path = require("path");
 
 module.exports = {
@@ -20,7 +21,7 @@ module.exports = {
     }
   },
 
-  outputDir: "target/classes/static",
+  outputDir: "target/spa",
   lintOnSave: false,
 
   css: {

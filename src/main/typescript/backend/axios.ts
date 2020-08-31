@@ -1,5 +1,4 @@
 import originalAxios from "axios";
-import * as AxiosLogger from "axios-logger";
 import { authenticationExpireHandler } from "@/backend/authenticationExpireHandler";
 
 export const axios = originalAxios.create({
@@ -19,8 +18,3 @@ axios.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-if (process.env.NODE_ENV === "development") {
-  axios.interceptors.request.use(AxiosLogger.requestLogger, AxiosLogger.errorLogger);
-  axios.interceptors.response.use(AxiosLogger.responseLogger, AxiosLogger.errorLogger);
-}

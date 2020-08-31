@@ -1,5 +1,5 @@
 export function stringToColor(str: string): string {
-  function range(hash: number, min: number, max: number) {
+  function range(hash: number, min: number, max: number): number {
     const diff = max - min;
     const x = ((hash % diff) + diff) % diff;
     return x + min;

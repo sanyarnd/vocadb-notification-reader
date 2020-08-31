@@ -14,7 +14,7 @@ export const api = {
   },
 
   async accountData(): Promise<AccountData> {
-    return axios.get<AccountData>("/api/account/data").then(value => value.data);
+    return axios.get<AccountData>("/api/v1/account").then(value => value.data);
   },
 
   async logout(): Promise<void> {
@@ -22,7 +22,7 @@ export const api = {
   },
 
   getNotifications(maxResults: number, startOffset: number, preferredLanguage: PreferredLanguage) {
-    return axios.get<NotificationsDTO>("/api/account/notifications", {
+    return axios.get<NotificationsDTO>("/api/v1/notifications", {
       params: {
         startOffset: startOffset,
         maxResults: maxResults,
@@ -32,6 +32,6 @@ export const api = {
   },
 
   async deleteNotifications(notificationIds: Array<number>): Promise<void> {
-    return axios.delete(`/api/account/notifications?notificationIds=${notificationIds}`);
+    return axios.delete(`/api/v1/notifications?notificationIds=${notificationIds}`);
   }
 };

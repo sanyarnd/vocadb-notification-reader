@@ -240,10 +240,7 @@ export default class extends Vue {
         }).length > 0
       );
     } else {
-      return value
-        .toString()
-        .toLocaleLowerCase()
-        .includes(searchLowerCase);
+      return value.toString().toLocaleLowerCase().includes(searchLowerCase);
     }
   }
 
