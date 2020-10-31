@@ -1,4 +1,4 @@
-export function authenticationExpireHandler() {
+export function authenticationExpireHandler(): void {
   if (window.location.pathname.startsWith("/login")) return;
 
   localStorage.clear();

@@ -1,6 +1,6 @@
 <template>
   <v-menu>
-    <template v-slot:activator="{ on }">
+    <template #activator="{ on }">
       <v-btn depressed small color="primary" v-on="on">
         <v-icon left>mdi-format-title</v-icon>
         {{ preferredService }}
@@ -33,7 +33,7 @@ export default class extends Vue {
     return this.userStore.getters.preferredService;
   }
 
-  setPreferredService(value: PvService) {
+  setPreferredService(value: PvService): void {
     this.userStore.actions.setPreferredService(value);
   }
 }

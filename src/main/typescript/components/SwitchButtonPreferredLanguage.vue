@@ -1,6 +1,6 @@
 <template>
   <v-menu>
-    <template v-slot:activator="{ on }">
+    <template #activator="{ on }">
       <v-btn depressed small color="primary" v-on="on">
         <v-icon left>mdi-format-title</v-icon>
         {{ preferredLanguages.get(preferredLanguage) }}
@@ -42,7 +42,7 @@ export default class extends Vue {
     return this.userStore.getters.preferredLanguage;
   }
 
-  setPreferredLanguage(value: PreferredLanguage) {
+  setPreferredLanguage(value: PreferredLanguage): void {
     this.userStore.actions.setPreferredLanguage(value);
   }
 }

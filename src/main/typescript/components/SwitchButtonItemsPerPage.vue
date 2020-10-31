@@ -1,6 +1,6 @@
 <template>
   <v-menu>
-    <template v-slot:activator="{ on }">
+    <template #activator="{ on }">
       <v-btn depressed small color="primary" v-on="on">
         <v-icon left>mdi-counter</v-icon>
         Items per page:
@@ -38,7 +38,7 @@ export default class extends Vue {
     return this.userStore.getters.itemsPerPage;
   }
 
-  setItemsPerPage(value: ItemsPerPage) {
+  setItemsPerPage(value: ItemsPerPage): void {
     this.userStore.actions.setItemsPerPage(value);
   }
 }

@@ -1,6 +1,6 @@
 <template>
   <v-menu>
-    <template v-slot:activator="{ on }">
+    <template #activator="{ on }">
       <v-btn depressed small color="primary" v-on="on">
         <v-icon left>mdi-translate</v-icon>
         {{ locale.text }}
@@ -39,7 +39,7 @@ export default class extends Vue {
     return find === undefined ? this.locales?.[0] : find;
   }
 
-  setLocale(locale: LocaleCode) {
+  setLocale(locale: LocaleCode): void {
     this.settingsStore.actions.setLocale(locale);
   }
 }

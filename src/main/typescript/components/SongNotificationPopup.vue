@@ -56,7 +56,7 @@
         <v-tab-item v-for="pv in notificationPvs" :key="pv.id">
           <v-card width="100vw" height="calc(100vh - 240px)">
             <iframe
-              style="width: 100%; height: calc(100vh - 240px);"
+              style="width: 100%; height: calc(100vh - 240px)"
               :src="embedForPv(pv.service, pv.pvId, pv.timestamp)"
               frameborder="0"
               allowfullscreen
@@ -104,7 +104,7 @@ export default class extends Vue {
   private selectedPv = 0;
 
   @Watch("showDialog")
-  selectPreferredService(value: boolean) {
+  selectPreferredService(value: boolean): void {
     if (value) {
       const id = this.notificationPvs
         .map(pv => pv.service)

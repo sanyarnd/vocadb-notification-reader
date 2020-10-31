@@ -24,7 +24,7 @@ export const store = createStore(root, {
   strict: process.env.NODE_ENV !== "production"
 });
 
-export function vuetifyRestoreHook() {
+export function vuetifyRestoreHook(): void {
   const settingsStore = settingsModule.context(store);
   vuetify.framework.lang.current = settingsStore.getters.locale;
   vuetify.framework.theme.dark = settingsStore.getters.isDarkTheme;

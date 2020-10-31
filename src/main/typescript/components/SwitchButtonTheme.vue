@@ -13,7 +13,7 @@ import { settingsModule } from "@/plugins/store/settings-module";
 export default class extends Vue {
   private settingsStore = settingsModule.context(this.$store);
 
-  get darkTheme() {
+  get darkTheme(): boolean {
     return this.settingsStore.getters.isDarkTheme;
   }
 

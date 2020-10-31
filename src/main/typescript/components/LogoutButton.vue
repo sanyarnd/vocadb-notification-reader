@@ -15,11 +15,11 @@ import SwitchButtonTheme from "@/components/SwitchButtonTheme.vue";
 export default class extends Vue {
   private userStore = userModule.context(this.$store);
 
-  get isAuthenticated() {
+  get isAuthenticated(): boolean {
     return this.userStore.getters.isAuthenticated;
   }
 
-  async logout() {
+  async logout(): Promise<void> {
     await this.userStore.actions.logout();
   }
 }

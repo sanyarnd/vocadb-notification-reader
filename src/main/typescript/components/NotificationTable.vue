@@ -33,7 +33,7 @@
       hide-default-footer
       @click:row="notificationSelectHandle"
     >
-      <template v-slot:top>
+      <template #top>
         <v-text-field
           v-model="searchQuery"
           :label="$vuetify.lang.t('$vuetify.notification.search')"
@@ -43,12 +43,12 @@
           hide-details
         />
       </template>
-      <template v-slot:item.type="{ item }">
+      <template #[`item.type`]="{ item }">
         <v-chip color="primary">
           <v-icon>{{ iconForType(item.type) }}</v-icon>
         </v-chip>
       </template>
-      <template v-slot:item.tags="{ item }">
+      <template #[`item.tags`]="{ item }">
         <v-chip-group column>
           <v-chip
             v-for="tag in item.tags"
@@ -62,7 +62,7 @@
           </v-chip>
         </v-chip-group>
       </template>
-      <template v-slot:item.releaseDate="{ item }">
+      <template #[`item.releaseDate`]="{ item }">
         {{
           new Date(item.releaseDate).toLocaleDateString(locale, {
             weekday: "short",
@@ -72,7 +72,7 @@
           })
         }}
       </template>
-      <template v-slot:item.originalBody="{ item }">
+      <template #[`item.originalBody`]="{ item }">
         {{ removeMarkdown(item.originalBody) }}
       </template>
     </v-data-table>
@@ -153,7 +153,7 @@ export default class extends Vue {
   private tabs = tabTypes;
   private selectedTab = 0;
 
-  mounted() {
+  mounted(): void {
     this.fetchNotifications(1);
   }
 
@@ -166,12 +166,12 @@ export default class extends Vue {
   }
 
   @Watch("userStore.getters.preferredLanguage")
-  onLocaleChange() {
+  onLocaleChange(): void {
     this.fetchNotifications(this.page);
   }
 
   @Watch("userStore.getters.itemsPerPage")
-  onItemsPerPageChange() {
+  onItemsPerPageChange(): void {
     this.changePage(1);
   }
 
@@ -221,7 +221,8 @@ export default class extends Vue {
   }
 
   customTableFilter(
-    value: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    value: any,
     search: string | null,
     item: VocaDbNotification // eslint-disable-line @typescript-eslint/no-unused-vars
   ): boolean {
@@ -244,13 +245,13 @@ export default class extends Vue {
     }
   }
 
-  updateTabNotifications() {
+  updateTabNotifications(): void {
     this.tabNotifications = tabsHelper[this.selectedTabType].notifications(
       this.notifications
     );
   }
 
-  changePage(page: number) {
+  changePage(page: number): void {
     const previousPage = this.page;
     this.page = page;
     this.selected = [];
@@ -261,7 +262,7 @@ export default class extends Vue {
     return Math.ceil(this.totalNotificationsCount / this.itemsPerPage);
   }
 
-  notificationSelectHandle(value: VocaDbNotification) {
+  notificationSelectHandle(value: VocaDbNotification): void {
     if (isSongNotification(value)) {
       if (this.loading || this.deleteInProgress || this.clicked !== null)
         return;
@@ -276,7 +277,7 @@ export default class extends Vue {
     }
   }
 
-  async fetchNotifications(previousPage: number) {
+  async fetchNotifications(previousPage: number): Promise<void> {
     this.loading = true;
     try {
       const preferredLanguage = this.userStore.getters.preferredLanguage;

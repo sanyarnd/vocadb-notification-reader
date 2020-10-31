@@ -1,6 +1,7 @@
 import { axios } from "@/backend/axios";
 import { AccountData, AuthenticationPayload, NotificationsDTO } from "@/backend/dto";
 import { PreferredLanguage } from "@/plugins/store/user-module";
+import {AxiosResponse} from "axios";
 
 export const api = {
   async authenticate(payload: AuthenticationPayload): Promise<void> {
@@ -21,7 +22,11 @@ export const api = {
     return axios.get("/logout");
   },
 
-  getNotifications(maxResults: number, startOffset: number, preferredLanguage: PreferredLanguage) {
+  getNotifications(
+    maxResults: number,
+    startOffset: number,
+    preferredLanguage: PreferredLanguage
+  ): Promise<AxiosResponse<NotificationsDTO>> {
     return axios.get<NotificationsDTO>("/api/v1/notifications", {
       params: {
         startOffset: startOffset,
