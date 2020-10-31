@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.3.3.RELEASE</version>
+        <version>2.4.0-RC1</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
@@ -20,15 +20,25 @@
         <java.version>11</java.version>
         <maven.version>3.6.3</maven.version>
 
-        <spotbugs.version>4.1.2</spotbugs.version>
-        <checker-framework.version>3.6.0</checker-framework.version>
-        <lombok.version>1.18.12</lombok.version>
-        <springdoc-openapi.version>1.4.4</springdoc-openapi.version>
-        <zalando-problem-spring.version>0.25.2</zalando-problem-spring.version>
+        <spring-graalvm-native.version>0.8.1</spring-graalvm-native.version>
+        <springdoc-openapi.version>1.4.8</springdoc-openapi.version>
+        <zalando-problem-spring.version>0.26.2</zalando-problem-spring.version>
+
+        <spotbugs-maven-plugin.version>4.0.0</spotbugs-maven-plugin.version>
+        <spotbugs.version>4.1.3</spotbugs.version>
+        <sb-contrib.version>7.4.7</sb-contrib.version>
+        <bug-pattern.version>1.5.0</bug-pattern.version>
+        <findsecbugs.version>LATEST</findsecbugs.version>
+
+        <maven-checkstyle-plugin.version>3.1.1</maven-checkstyle-plugin.version>
+        <checkstyle.version>8.36.2</checkstyle.version>
+
         <archunit.version>0.14.1</archunit.version>
+        <jetbrains-annotations.version>20.1.0</jetbrains-annotations.version>
     </properties>
 
     <dependencies>
+        <!-- Spring Framework -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
@@ -38,9 +48,17 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.fasterxml.jackson.module</groupId>
-            <artifactId>jackson-module-afterburner</artifactId>
+            <groupId>org.springframework.experimental</groupId>
+            <artifactId>spring-graalvm-native</artifactId>
+            <version>${spring-graalvm-native.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context-indexer</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Swagger API -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-webflux-ui</artifactId>
@@ -51,6 +69,8 @@
             <artifactId>springdoc-openapi-security</artifactId>
             <version>${springdoc-openapi.version}</version>
         </dependency>
+
+        <!-- Error handling -->
         <dependency>
             <groupId>org.zalando</groupId>
             <artifactId>problem-spring-webflux</artifactId>
@@ -69,20 +89,14 @@
 
         <!-- Utility -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-configuration-processor</artifactId>
-            <optional>true</optional>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>${jetbrains-annotations.version}</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
             <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.checkerframework</groupId>
-            <artifactId>checker-qual</artifactId>
-            <version>${checker-framework.version}</version>
         </dependency>
         <dependency>
             <groupId>com.github.spotbugs</groupId>
@@ -117,22 +131,12 @@
                         <enabled>true</enabled>
                     </layers>
                 </configuration>
-                <executions>
-                    <execution>
-                        <id>build-info</id>
-                        <goals>
-                            <goal>build-info</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <fork>true</fork>
-
                     <release>${java.version}</release>
                     <parameters>true</parameters>
 
@@ -141,40 +145,6 @@
 
                     <compilerArgument>-Xlint:all</compilerArgument>
                     <compilerArgument>-Xdoclint:all</compilerArgument>
-                    <compilerArguments>
-                        <Xmaxerrs>10000</Xmaxerrs>
-                        <Xmaxwarns>10000</Xmaxwarns>
-                    </compilerArguments>
-
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                        <!--<path>
-                            <groupId>org.checkerframework</groupId>
-                            <artifactId>checker</artifactId>
-                            <version>${checker-framework.version}</version>
-                        </path>-->
-                    </annotationProcessorPaths>
-
-                    <annotationProcessors>
-                        <!--<annotationProcessor>org.checkerframework.checker.nullness.NullnessChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.optional.OptionalChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.regex.RegexChecker</annotationProcessor>
-                        <annotationProcessor>
-                            org.checkerframework.checker.formatter.FormatterChecker
-                        </annotationProcessor>-->
-                        <annotationProcessor>
-                            lombok.launch.AnnotationProcessorHider$AnnotationProcessor
-                        </annotationProcessor>
-                    </annotationProcessors>
-
-                    <compilerArgs>
-                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
-                        <!-- <arg>-Awarns</arg> -->
-                    </compilerArgs>
                 </configuration>
             </plugin>
 
@@ -213,12 +183,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-checkstyle-plugin</artifactId>
-                <version>3.1.1</version>
+                <version>${maven-checkstyle-plugin.version}</version>
                 <dependencies>
                     <dependency>
                         <groupId>com.puppycrawl.tools</groupId>
                         <artifactId>checkstyle</artifactId>
-                        <version>8.35</version>
+                        <version>${checkstyle.version}</version>
                     </dependency>
                 </dependencies>
                 <executions>
@@ -239,7 +209,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.0.0</version>
+                <version>${spotbugs-maven-plugin.version}</version>
                 <dependencies>
                     <dependency>
                         <groupId>com.github.spotbugs</groupId>
@@ -254,19 +224,19 @@
                         <plugin>
                             <groupId>com.mebigfatguy.sb-contrib</groupId>
                             <artifactId>sb-contrib</artifactId>
-                            <version>7.4.7</version>
+                            <version>${sb-contrib.version}</version>
                         </plugin>
 
                         <plugin>
                             <groupId>com.h3xstream.findsecbugs</groupId>
                             <artifactId>findsecbugs-plugin</artifactId>
-                            <version>LATEST</version>
+                            <version>${findsecbugs.version}</version>
                         </plugin>
 
                         <plugin>
                             <groupId>jp.skypencil.findbugs.slf4j</groupId>
                             <artifactId>bug-pattern</artifactId>
-                            <version>1.5.0</version>
+                            <version>${bug-pattern.version}</version>
                         </plugin>
                     </plugins>
                 </configuration>
@@ -281,4 +251,19 @@
             </plugin>
         </plugins>
     </build>
+
+    <repositories>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+        </repository>
+    </repositories>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+        </pluginRepository>
+    </pluginRepositories>
 </project>

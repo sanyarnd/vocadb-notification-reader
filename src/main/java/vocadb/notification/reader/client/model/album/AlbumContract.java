@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.Status;
 import vocadb.notification.reader.client.model.misc.OptionalDateTimeContract;
 import vocadb.notification.reader.client.model.releaseevent.ReleaseEventForApiContract;

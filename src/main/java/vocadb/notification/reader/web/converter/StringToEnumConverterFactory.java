@@ -2,7 +2,7 @@ package vocadb.notification.reader.web.converter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.checkerframework.checker.nullness.qual.NonNull;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.convert.converter.ConverterFactory;
 import org.springframework.stereotype.Component;
@@ -18,7 +18,7 @@ public class StringToEnumConverterFactory implements ConverterFactory<String, En
     private final ObjectMapper objectMapper;
 
     @Override
-    public <T extends Enum> @NonNull Converter<String, T> getConverter(@NonNull Class<T> targetType) {
+    public <T extends Enum> @NotNull Converter<String, T> getConverter(@NotNull Class<T> targetType) {
         return new StringToEnum<>(targetType, objectMapper);
     }
 

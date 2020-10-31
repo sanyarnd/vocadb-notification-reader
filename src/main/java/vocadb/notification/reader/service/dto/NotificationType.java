@@ -1,4 +1,4 @@
-package vocadb.notification.reader.model;
+package vocadb.notification.reader.service.dto;
 
 public enum NotificationType {
     SONG,

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Collection;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import vocadb.notification.reader.model.notification.Notification;
+import vocadb.notification.reader.service.dto.notification.Notification;
 
 @Getter
 @RequiredArgsConstructor

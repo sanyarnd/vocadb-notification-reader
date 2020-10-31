@@ -15,7 +15,6 @@ import org.springframework.security.web.server.authentication.ServerAuthenticati
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
 import org.zalando.problem.spring.webflux.advice.security.SecurityProblemSupport;
 import reactor.core.publisher.Mono;
-import vocadb.notification.reader.service.security.Authority;
 
 @Configuration
 @Import(SecurityProblemSupport.class)
@@ -31,12 +30,13 @@ public class SecurityConfiguration {
             it.authenticationEntryPoint(problemSupport);
             it.accessDeniedHandler(problemSupport);
         })
-                .httpBasic().disable()
                 // TODO check/enable later
+                .httpBasic().disable()
                 .requestCache().disable()
                 .csrf().disable()
                 .cors().disable()
                 .headers().disable()
+                .anonymous().disable()
 
                 .formLogin(e -> {
                     e.loginPage("/login");
@@ -47,13 +47,17 @@ public class SecurityConfiguration {
                     e.authenticationSuccessHandler(this::successHandler);
                 })
                 .logout(e -> e.logoutSuccessHandler(this::successHandler))
-                .anonymous().and()
+
                 .authorizeExchange(e -> {
-                    e.pathMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+                    // permit all preflight requests
+                    e.pathMatchers(HttpMethod.OPTIONS).permitAll();
+
+                    // allow an arbitrary access to login and swagger endpoints
                     e.pathMatchers("/login", "/login/**").permitAll();
                     e.pathMatchers("/webjars/**").permitAll();
                     e.pathMatchers("/swagger-ui*", "/v3/**").permitAll();
-                    e.pathMatchers("/**").hasAuthority(Authority.ROLE_USER);
+
+                    // everything else must be authenticated
                     e.anyExchange().authenticated();
                 })
                 .build();

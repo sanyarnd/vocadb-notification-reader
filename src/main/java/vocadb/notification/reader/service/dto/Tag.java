@@ -1,9 +1,9 @@
-package vocadb.notification.reader.model;
+package vocadb.notification.reader.service.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.tag.TagBaseContract;
 import vocadb.notification.reader.client.model.tag.TagUsageForApiContract;
 

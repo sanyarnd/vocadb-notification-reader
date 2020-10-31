@@ -1,4 +1,4 @@
-package vocadb.notification.reader.model.notification;
+package vocadb.notification.reader.service.dto.notification;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;

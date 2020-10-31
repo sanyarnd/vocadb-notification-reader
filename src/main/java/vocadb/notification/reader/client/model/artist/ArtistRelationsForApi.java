@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Collection;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.album.AlbumForApiContract;
 import vocadb.notification.reader.client.model.releaseevent.ReleaseEventForApiContract;
 import vocadb.notification.reader.client.model.song.SongForApiContract;

@@ -3,7 +3,7 @@ package vocadb.notification.reader.client.model.misc;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.Language;
 
 @Getter

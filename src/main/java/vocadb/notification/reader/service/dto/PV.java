@@ -1,11 +1,11 @@
-package vocadb.notification.reader.model;
+package vocadb.notification.reader.service.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.Map;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.pv.PVContract;
 import vocadb.notification.reader.client.model.pv.PVExtendedMetadata;
 import vocadb.notification.reader.client.model.pv.PvService;

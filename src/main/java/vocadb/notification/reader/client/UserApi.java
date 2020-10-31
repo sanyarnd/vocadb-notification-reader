@@ -9,7 +9,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 import org.apache.commons.lang3.tuple.Pair;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.misc.PartialFindResult;
 import vocadb.notification.reader.client.model.user.Inbox;
 import vocadb.notification.reader.client.model.user.UserForApiContract;

@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.tuple.Pair;
-import org.checkerframework.checker.nullness.NullnessUtil;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -21,19 +20,19 @@ import vocadb.notification.reader.client.model.user.Inbox;
 import vocadb.notification.reader.client.model.user.UserMessageContract;
 import vocadb.notification.reader.client.query.LanguagePreference;
 import vocadb.notification.reader.client.query.OptionalFields;
-import vocadb.notification.reader.model.NotificationType;
-import vocadb.notification.reader.model.PV;
-import vocadb.notification.reader.model.SongNotificationType;
-import vocadb.notification.reader.model.Tag;
-import vocadb.notification.reader.model.notification.AlbumNotification;
-import vocadb.notification.reader.model.notification.ArtistNotification;
-import vocadb.notification.reader.model.notification.EventNotification;
-import vocadb.notification.reader.model.notification.Notification;
-import vocadb.notification.reader.model.notification.ReportNotification;
-import vocadb.notification.reader.model.notification.SongNotification;
-import vocadb.notification.reader.model.notification.UnknownNotification;
+import vocadb.notification.reader.service.dto.NotificationType;
+import vocadb.notification.reader.service.dto.PV;
+import vocadb.notification.reader.service.dto.SongNotificationType;
+import vocadb.notification.reader.service.dto.Tag;
+import vocadb.notification.reader.service.dto.notification.AlbumNotification;
+import vocadb.notification.reader.service.dto.notification.ArtistNotification;
+import vocadb.notification.reader.service.dto.notification.EventNotification;
+import vocadb.notification.reader.service.dto.notification.Notification;
+import vocadb.notification.reader.service.dto.notification.ReportNotification;
+import vocadb.notification.reader.service.dto.notification.SongNotification;
+import vocadb.notification.reader.service.dto.notification.UnknownNotification;
 import static java.util.Collections.emptyList;
-import static vocadb.notification.reader.model.NotificationType.UNKNOWN;
+import static vocadb.notification.reader.service.dto.NotificationType.UNKNOWN;
 
 @Component
 @RequiredArgsConstructor
@@ -64,7 +63,7 @@ public class NotificationService {
                 .getMessages(userId, Inbox.NOTIFICATIONS, null, null, startOffset, maxResults, true)
                 .toCompletableFuture()
                 .thenApply(r -> {
-                    Integer totalCount = NullnessUtil.castNonNull(r.totalCount());
+                    Integer totalCount = r.totalCount();
                     if (r.items() == null) {
                         return Pair.of(emptyList(), 0);
                     }
@@ -191,13 +190,13 @@ public class NotificationService {
             return unknown;
         }
 
-        String typeStr = NullnessUtil.castNonNull(matcher.group(1));
+        String typeStr = matcher.group(1);
         NotificationType type = NotificationType.of(typeStr);
         if (type == UNKNOWN) {
             return unknown;
         }
 
-        String id = NullnessUtil.castNonNull(matcher.group(2));
+        String id = matcher.group(2);
         int matchedId = Integer.parseInt(id);
         return Pair.of(type, matchedId);
     }

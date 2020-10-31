@@ -1,4 +1,4 @@
-package vocadb.notification.reader.configuration;
+package vocadb.notification.reader.security;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.util.Objects;

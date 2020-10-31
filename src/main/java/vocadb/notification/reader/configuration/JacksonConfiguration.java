@@ -3,7 +3,6 @@ package vocadb.notification.reader.configuration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.codec.json.Jackson2JsonEncoder;
@@ -20,11 +19,6 @@ class JacksonConfiguration {
     @Bean
     Jdk8Module jdk8TimeModule() {
         return new Jdk8Module();
-    }
-
-    @Bean
-    AfterburnerModule afterburnerModule() {
-        return new AfterburnerModule();
     }
 
     @Bean

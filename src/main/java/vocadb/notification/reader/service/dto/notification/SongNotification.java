@@ -1,14 +1,14 @@
-package vocadb.notification.reader.model.notification;
+package vocadb.notification.reader.service.dto.notification;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import lombok.Getter;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.song.SongType;
-import vocadb.notification.reader.model.PV;
-import vocadb.notification.reader.model.SongNotificationType;
-import vocadb.notification.reader.model.Tag;
+import vocadb.notification.reader.service.dto.PV;
+import vocadb.notification.reader.service.dto.SongNotificationType;
+import vocadb.notification.reader.service.dto.Tag;
 
 @Getter
 public class SongNotification extends Notification {

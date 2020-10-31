@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.model.Status;
 import vocadb.notification.reader.client.model.artist.ArtistForEventContract;
 import vocadb.notification.reader.client.model.entrythumb.EntryThumbForApiContract;
