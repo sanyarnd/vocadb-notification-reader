@@ -5,5 +5,5 @@ import org.zalando.problem.spring.webflux.advice.ProblemHandling;
 import org.zalando.problem.spring.webflux.advice.security.SecurityAdviceTrait;
 
 @ControllerAdvice
-class ProblemAdvice implements ProblemHandling, SecurityAdviceTrait {
+public class ProblemAdvice implements ProblemHandling, SecurityAdviceTrait {
 }
