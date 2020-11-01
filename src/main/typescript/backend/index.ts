@@ -9,7 +9,7 @@ export const api = {
     const encName = encodeURIComponent(payload.username);
     const data = `username=${encName}&password=${encPass}`;
 
-    return axios.post("/login/authentication", data, {
+    return axios.post("/api/login/authentication", data, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
   },
@@ -19,7 +19,7 @@ export const api = {
   },
 
   async logout(): Promise<void> {
-    return axios.get("/logout");
+    return axios.post("/api/logout");
   },
 
   getNotifications(
