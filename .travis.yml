@@ -1,23 +1,22 @@
 language: bash
 dist: bionic
 
+env:
+  global:
+    DOCKER_BUILDKIT: "1"
+    DOCKER_CLI_EXPERIMENTAL: "enabled"
+
 before_install:
-  - sudo rm -rf /var/lib/apt/lists/*
-  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) edge"
-  - sudo apt-get update
-  - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce
-  - mkdir -vp ~/.docker/cli-plugins/
-  - curl --silent -L "https://github.com/docker/buildx/releases/download/v0.4.2/buildx-v0.4.2.linux-amd64" > ~/.docker/cli-plugins/docker-buildx
-  - chmod a+x ~/.docker/cli-plugins/docker-buildx
   - echo '{"experimental":true}' | sudo tee /etc/docker/daemon.json
+  - sudo service docker restart
+  - docker info
 
 before_script:
   - curl https://cli-assets.heroku.com/install.sh | sh
   - docker login --username=_ --password=$HEROKU_API_KEY registry.heroku.com
 
 script:
-  - DOCKER_BUILDKIT=1 docker build --build-arg BRANCH_NAME='$TRAVIS_BRANCH' --build-arg COMMIT_SHA=$TRAVIS_COMMIT
+  - docker build --build-arg BRANCH_NAME='$TRAVIS_BRANCH' --build-arg COMMIT_SHA=$TRAVIS_COMMIT
     -t registry.heroku.com/unofficial-vocadb-ntf-reader/web .
 
 deploy:
