@@ -1,4 +1,6 @@
 # VocaDB Notification Reader
+[![Build Status](https://travis-ci.com/sanyarnd/vocadb-notification-reader.svg?branch=master)](https://travis-ci.com/sanyarnd/vocadb-notification-reader)
+
 Unofficial notification reader for:
 * https://vocadb.net
 * https://touhoudb.com
