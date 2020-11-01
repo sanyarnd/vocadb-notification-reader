@@ -16,7 +16,7 @@ import org.springframework.security.web.server.util.matcher.ServerWebExchangeMat
 import org.zalando.problem.spring.webflux.advice.security.SecurityProblemSupport;
 import reactor.core.publisher.Mono;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @Import(SecurityProblemSupport.class)
 @RequiredArgsConstructor
 public class SecurityConfiguration {
@@ -39,21 +39,24 @@ public class SecurityConfiguration {
                 .anonymous().disable()
 
                 .formLogin(e -> {
-                    e.loginPage("/login");
+                    e.loginPage("/api/login");
                     e.requiresAuthenticationMatcher(
-                            ServerWebExchangeMatchers.pathMatchers(HttpMethod.POST, "/login/authentication")
+                            ServerWebExchangeMatchers.pathMatchers(HttpMethod.POST, "/api/login/authentication")
                     );
                     e.authenticationFailureHandler(problemAuthenticationHandler);
                     e.authenticationSuccessHandler(this::successHandler);
                 })
-                .logout(e -> e.logoutSuccessHandler(this::successHandler))
+                .logout(e -> {
+                    e.logoutSuccessHandler(this::successHandler);
+                    e.logoutUrl("/api/logout");
+                })
 
                 .authorizeExchange(e -> {
                     // permit all preflight requests
                     e.pathMatchers(HttpMethod.OPTIONS).permitAll();
 
                     // allow an arbitrary access to login and swagger endpoints
-                    e.pathMatchers("/login", "/login/**").permitAll();
+                    e.pathMatchers("/api/login/**", "/api/logout").permitAll();
                     e.pathMatchers("/webjars/**").permitAll();
                     e.pathMatchers("/swagger-ui*", "/v3/**").permitAll();
 

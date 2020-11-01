@@ -11,7 +11,7 @@ import org.springframework.web.server.WebExceptionHandler;
 import org.zalando.problem.spring.webflux.advice.ProblemExceptionHandler;
 import org.zalando.problem.spring.webflux.advice.ProblemHandling;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @AutoConfigureAfter(DispatcherServletAutoConfiguration.class)
 class WebConfiguration implements WebFluxConfigurer {
 

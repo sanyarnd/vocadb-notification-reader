@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import vocadb.notification.reader.client.VocaDbClient;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class VocaDbClientConfiguration {
 
     @Bean @Scope("prototype")
