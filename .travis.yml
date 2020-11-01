@@ -6,7 +6,7 @@ services:
 
 before_script:
   - curl https://cli-assets.heroku.com/install.sh | sh
-  - docker login --username=$HEROKU_USERNAME --password=$HEROKU_API_KEY registry.heroku.com
+  - docker login --username=_ --password=$HEROKU_API_KEY registry.heroku.com
 
 script:
   - docker build --build-arg BRANCH_NAME='$TRAVIS_BRANCH' --build-arg COMMIT_SHA=$TRAVIS_COMMIT
