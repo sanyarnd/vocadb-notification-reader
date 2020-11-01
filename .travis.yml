@@ -1,10 +1,14 @@
-language: bash
-dist: bionic
+os: linux
+dist: focal
+language: shell
 
 env:
   global:
     DOCKER_BUILDKIT: "1"
     DOCKER_CLI_EXPERIMENTAL: "enabled"
+
+services:
+  - docker
 
 before_install:
   - echo '{"experimental":true}' | sudo tee /etc/docker/daemon.json
