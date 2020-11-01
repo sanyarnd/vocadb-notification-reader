@@ -9,7 +9,7 @@ before_script:
   - docker login --username=_ --password=$HEROKU_API_KEY registry.heroku.com
 
 script:
-  - docker build --build-arg BRANCH_NAME='$TRAVIS_BRANCH' --build-arg COMMIT_SHA=$TRAVIS_COMMIT
+  - DOCKER_BUILDKIT=1 docker build --build-arg BRANCH_NAME='$TRAVIS_BRANCH' --build-arg COMMIT_SHA=$TRAVIS_COMMIT
       -t registry.heroku.com/unofficial-vocadb-ntf-reader/web .
 
 deploy:
