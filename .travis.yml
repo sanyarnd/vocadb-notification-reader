@@ -25,8 +25,7 @@ script:
 
 deploy:
   provider: script
-  script:
-    docker push registry.heroku.com/unofficial-vocadb-ntf-reader/web
+  script: docker push registry.heroku.com/unofficial-vocadb-ntf-reader/web &&
     heroku container:release web --app unofficial-vocadb-ntf-reader
   on:
     branch: master
