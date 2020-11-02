@@ -14,7 +14,7 @@ export default {
     password: "Password",
     usernameRequired: "Username is required",
     passwordRequired: "Password is required",
-    loginVocaDB: "Login with VocaDB",
+    loginWith: "Login with ",
 
     badCredentials: "Incorrect username or password"
   },

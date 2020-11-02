@@ -30,7 +30,10 @@
       <v-avatar tile size="24px">
         <v-img src="../assets/login-icon.webp" />
       </v-avatar>
-      {{ $vuetify.lang.t("$vuetify.login.loginVocaDB") }}
+      {{
+        $vuetify.lang.t("$vuetify.login.loginWith") +
+        selectedPreferredLoginService
+      }}
     </v-btn>
     <v-snackbar v-model="showError" color="red" transition="scale-transition">
       {{ errorMessage }}

@@ -13,7 +13,7 @@ export default {
     password: "Пароль",
     usernameRequired: "Имя пользователя обязательно",
     passwordRequired: "Пароль обязателен",
-    loginVocaDB: "Войти через VocaDB",
+    loginWith: "Войти через ",
 
     badCredentials: "Неправильные имя пользователя или пароль"
   },
