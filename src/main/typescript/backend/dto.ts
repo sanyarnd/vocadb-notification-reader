@@ -1,6 +1,9 @@
+import { PreferredLoginService } from "@/plugins/store/user-module";
+
 export interface AuthenticationPayload {
   username: string;
   password: string;
+  loginService: PreferredLoginService;
 }
 
 export type VocaDbNotification = SongNotification | UnknownNotification;

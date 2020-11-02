@@ -18,6 +18,14 @@
       @keyup.enter="valid ? submit() : true"
     />
 
+    <v-select
+      v-model="selectedPreferredLoginService"
+      :items="loginServices"
+      label="Login to..."
+      solo
+      @change="setPreferredLoginService"
+    ></v-select>
+
     <v-btn :disabled="!valid" :loading="loginInProgress" block @click="submit">
       <v-avatar tile size="24px">
         <v-img src="../assets/login-icon.webp" />
@@ -36,11 +44,19 @@
 <script lang="ts">
 import Vue from "vue";
 import { Component, Watch } from "vue-property-decorator";
-import { userModule } from "@/plugins/store/user-module";
+import { PreferredLoginService, userModule } from "@/plugins/store/user-module";
 
 @Component
 export default class extends Vue {
   private userStore = userModule.context(this.$store);
+
+  private readonly loginServices: Array<PreferredLoginService> = [
+    "VOCADB",
+    "UTAITE",
+    "TOUHOU"
+  ];
+  private selectedPreferredLoginService: PreferredLoginService = this.userStore
+    .getters.preferredLoginService;
 
   private valid = false;
 
@@ -72,6 +88,10 @@ export default class extends Vue {
     this.errorMessage = "";
   }
 
+  setPreferredLoginService(value: PreferredLoginService): void {
+    this.userStore.actions.setPreferredLoginService(value);
+  }
+
   private async submit() {
     this.loginInProgress = true;
     this.resetErrorState();
@@ -79,7 +99,8 @@ export default class extends Vue {
     try {
       await this.userStore.actions.authenticate({
         username: this.username,
-        password: this.password
+        password: this.password,
+        loginService: this.selectedPreferredLoginService
       });
 
       // if everything is ok, redirect

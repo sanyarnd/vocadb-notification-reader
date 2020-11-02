@@ -1,4 +1,4 @@
-package vocadb.notification.reader.client;
+package vocadb.notification.reader.client.api;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -8,8 +8,8 @@ import java.time.Duration;
 import lombok.Getter;
 
 @Getter
-public final class VocaDbClient extends BaseClient {
-    private VocaDbClient(
+public final class UtaiteDbClient extends BaseClient {
+    private UtaiteDbClient(
             ObjectMapper objectMapper,
             URI baseUrl,
             ProxySelector proxySelector,
@@ -19,16 +19,16 @@ public final class VocaDbClient extends BaseClient {
         super(objectMapper, baseUrl, proxySelector, connectTimeout, followRedirects);
     }
 
-    public static class Builder extends BaseClient.BaseBuilder<VocaDbClient> {
-        public VocaDbClient build() {
+    public static class Builder extends BaseBuilder<UtaiteDbClient> {
+        public UtaiteDbClient build() {
             if (baseUrl == null) {
-                baseUrl = URI.create("https://vocadb.net");
+                baseUrl = URI.create("https://utaitedb.net/");
             }
             if (objectMapper == null) {
                 objectMapper = defaultObjectMapper();
             }
 
-            return new VocaDbClient(objectMapper, baseUrl, proxySelector, connectTimeout, followRedirects);
+            return new UtaiteDbClient(objectMapper, baseUrl, proxySelector, connectTimeout, followRedirects);
         }
     }
 }

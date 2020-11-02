@@ -1,4 +1,4 @@
-package vocadb.notification.reader.client;
+package vocadb.notification.reader.client.api;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;
+import vocadb.notification.reader.client.HttpUtils;
 import vocadb.notification.reader.client.model.pv.PvService;
 import vocadb.notification.reader.client.model.song.SongForApiContract;
 import vocadb.notification.reader.client.query.LanguagePreference;

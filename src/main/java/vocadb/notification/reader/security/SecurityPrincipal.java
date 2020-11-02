@@ -10,11 +10,11 @@ import vocadb.notification.reader.client.model.user.UserForApiContract;
 
 @Getter
 @SuppressFBWarnings("EQ_DOESNT_OVERRIDE_EQUALS")
-public class VocaDbPrincipal extends User {
+public class SecurityPrincipal extends User {
     private final UserForApiContract vocadbUser;
     private final List<String> cookies;
 
-    public VocaDbPrincipal(
+    public SecurityPrincipal(
             UserForApiContract vocadbUser,
             List<String> cookies,
             Collection<? extends GrantedAuthority> authorities

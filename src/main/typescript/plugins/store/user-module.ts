@@ -8,12 +8,16 @@ export type PreferredLanguage = typeof preferredLanguageData[number];
 export const itemsPerPageData = [10, 25, 50] as const;
 export type ItemsPerPage = typeof itemsPerPageData[number];
 
+export const loginServiceData = ["VOCADB", "TOUHOU", "UTAITE"] as const;
+export type PreferredLoginService = typeof loginServiceData[number];
+
 class UserState {
   name = "";
   authenticated = false;
   itemsPerPage: ItemsPerPage = 25;
   preferredLanguage: PreferredLanguage = "DEFAULT";
   preferredService: PvService = "NicoNicoDouga";
+  preferredLoginService: PreferredLoginService = "VOCADB";
 }
 
 class UserGetters extends Getters<UserState> {
@@ -36,6 +40,10 @@ class UserGetters extends Getters<UserState> {
   get itemsPerPage(): ItemsPerPage {
     return this.state.itemsPerPage;
   }
+
+  get preferredLoginService(): PreferredLoginService {
+    return this.state.preferredLoginService;
+  }
 }
 
 class UserMutations extends Mutations<UserState> {
@@ -54,6 +62,10 @@ class UserMutations extends Mutations<UserState> {
 
   setItemsPerPage(itemsPerPage: ItemsPerPage) {
     this.state.itemsPerPage = itemsPerPage;
+  }
+
+  setPreferredLoginService(selectedService: PreferredLoginService) {
+    this.state.preferredLoginService = selectedService;
   }
 }
 
@@ -81,6 +93,10 @@ class UserActions extends Actions<UserState, UserGetters, UserMutations, UserAct
 
   setItemsPerPage(itemsPerPage: ItemsPerPage) {
     this.mutations.setItemsPerPage(itemsPerPage);
+  }
+
+  setPreferredLoginService(selectedService: PreferredLoginService) {
+    this.mutations.setPreferredLoginService(selectedService);
   }
 }
 

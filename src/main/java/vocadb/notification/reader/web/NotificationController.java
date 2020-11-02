@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 import vocadb.notification.reader.client.query.LanguagePreference;
-import vocadb.notification.reader.security.VocaDbPrincipal;
+import vocadb.notification.reader.security.SecurityPrincipal;
 import vocadb.notification.reader.service.NotificationService;
 import vocadb.notification.reader.web.dto.NotificationsDto;
 
@@ -29,13 +29,13 @@ public class NotificationController {
 
     @GetMapping
     public Mono<NotificationsDto> getNotifications(
-            @AuthenticationPrincipal VocaDbPrincipal principal,
+            @AuthenticationPrincipal SecurityPrincipal securityPrincipal,
             @RequestParam @PositiveOrZero int startOffset,
             @RequestParam @PositiveOrZero @Max(100) int maxResults,
             @RequestParam LanguagePreference languagePreference
     ) {
-        int userId = principal.vocadbUser().id();
-        List<String> authCookies = principal.cookies();
+        int userId = securityPrincipal.vocadbUser().id();
+        List<String> authCookies = securityPrincipal.cookies();
 
         return Mono.fromCompletionStage(
                 notificationService.loadNotifications(userId, startOffset, maxResults, authCookies, languagePreference))
@@ -44,11 +44,11 @@ public class NotificationController {
 
     @DeleteMapping
     public Mono<Void> deleteNotifications(
-            @AuthenticationPrincipal VocaDbPrincipal principal,
+            @AuthenticationPrincipal SecurityPrincipal securityPrincipal,
             @RequestParam @NotEmpty List<Integer> notificationIds
     ) {
-        int userId = principal.vocadbUser().id();
-        List<String> authCookies = principal.cookies();
+        int userId = securityPrincipal.vocadbUser().id();
+        List<String> authCookies = securityPrincipal.cookies();
         return notificationService.deleteNotifications(userId, notificationIds, authCookies);
     }
 }

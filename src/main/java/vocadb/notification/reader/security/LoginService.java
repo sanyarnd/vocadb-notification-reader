@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 
 @RequiredArgsConstructor
-public enum VocadbRole implements GrantedAuthority {
+public enum LoginService implements GrantedAuthority {
     VOCADB(Name.VOCADB),
     TOUHOU(Name.TOUHOUDB),
-    TAITE(Name.TAITEDB);
+    UTAITE(Name.UTAITEDB);
 
     private final String authority;
 
@@ -16,8 +16,8 @@ public enum VocadbRole implements GrantedAuthority {
     }
 
     public interface Name {
-        String VOCADB = "ROLE_VOCADB";
-        String TOUHOUDB = "ROLE_TOUHOUDB";
-        String TAITEDB = "ROLE_TAITEDB";
+        String VOCADB = "VOCADB";
+        String TOUHOUDB = "TOUHOUDB";
+        String UTAITEDB = "UTAITEDB";
     }
 }

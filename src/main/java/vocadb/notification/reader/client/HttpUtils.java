@@ -8,16 +8,16 @@ import java.util.Map;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
-class HttpUtils {
+public class HttpUtils {
 
     public static final String APPLICATION_JSON = "application/json";
     public static final String ACCEPT = "Accept";
 
-    static HttpRequest getRequest(URI uri) {
+    public static HttpRequest getRequest(URI uri) {
         return HttpRequest.newBuilder().header(ACCEPT, APPLICATION_JSON).uri(uri).GET().build();
     }
 
-    static HttpRequest deleteRequest(URI uri) {
+    public static HttpRequest deleteRequest(URI uri) {
         return HttpRequest.newBuilder().header(ACCEPT, APPLICATION_JSON).uri(uri).DELETE().build();
     }
 

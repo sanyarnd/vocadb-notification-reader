@@ -1,13 +1,14 @@
 import { axios } from "@/backend/axios";
 import { AccountData, AuthenticationPayload, NotificationsDTO } from "@/backend/dto";
 import { PreferredLanguage } from "@/plugins/store/user-module";
-import {AxiosResponse} from "axios";
+import { AxiosResponse } from "axios";
 
 export const api = {
   async authenticate(payload: AuthenticationPayload): Promise<void> {
     const encPass = encodeURIComponent(payload.password);
     const encName = encodeURIComponent(payload.username);
-    const data = `username=${encName}&password=${encPass}`;
+    const encService = encodeURIComponent(payload.loginService);
+    const data = `username=${encName}&password=${encPass}&login-service=${encService}`;
 
     return axios.post("/api/login/authentication", data, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" }

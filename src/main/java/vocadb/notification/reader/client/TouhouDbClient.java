@@ -8,8 +8,8 @@ import java.time.Duration;
 import lombok.Getter;
 
 @Getter
-public final class VocaDbClient extends BaseClient {
-    private VocaDbClient(
+public final class TouhouDbClient extends BaseClient {
+    private TouhouDbClient(
             ObjectMapper objectMapper,
             URI baseUrl,
             ProxySelector proxySelector,
@@ -19,8 +19,8 @@ public final class VocaDbClient extends BaseClient {
         super(objectMapper, baseUrl, proxySelector, connectTimeout, followRedirects);
     }
 
-    public static class Builder extends BaseClient.BaseBuilder<VocaDbClient> {
-        public VocaDbClient build() {
+    public static class Builder extends BaseBuilder<TouhouDbClient> {
+        public TouhouDbClient build() {
             if (baseUrl == null) {
                 baseUrl = URI.create("https://vocadb.net");
             }
@@ -28,7 +28,9 @@ public final class VocaDbClient extends BaseClient {
                 objectMapper = defaultObjectMapper();
             }
 
-            return new VocaDbClient(objectMapper, baseUrl, proxySelector, connectTimeout, followRedirects);
+            return new TouhouDbClient(objectMapper, baseUrl, proxySelector, connectTimeout, followRedirects);
         }
+
+
     }
 }
