@@ -8,6 +8,7 @@ import java.net.http.HttpRequest;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
+import java.util.stream.Collectors;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.Nullable;
 import vocadb.notification.reader.client.HttpUtils;
@@ -95,11 +96,9 @@ public class UserApi extends Api {
         if (messageIds.isEmpty()) {
             throw new IllegalArgumentException("Need at least 1 message id");
         }
-        List<Pair<String, ?>> params = List.of(
-                Pair.of("messageId", messageIds)
-        );
+        String query = messageIds.stream().map(id -> "messageId=" + id).collect(Collectors.joining("&"));
         HttpRequest request = HttpUtils.deleteRequest(
-                baseUrl.resolve(String.format("/api/users/%d/messages?%s", userId, toQuery(params)))
+            baseUrl.resolve(String.format("/api/users/%d/messages?%s", userId, query))
         );
         return sendAsync(request);
     }
