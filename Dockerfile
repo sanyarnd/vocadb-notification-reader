@@ -12,11 +12,7 @@ COPY checkstyle.xml checkstyle.xml
 COPY src/main/resources src/main/resources
 COPY src/main/java src/main/java
 
-ARG BRANCH_NAME="no-info"
-ARG COMMIT_SHA="no-info"
-
 RUN --mount=type=cache,target=/root/.m2 mvn package \
-    -Dversion.revision=${COMMIT_SHA:0:10} -Dgit.branch=${BRANCH_NAME} -Dgit.sha=${COMMIT_SHA} \
     --batch-mode --errors --fail-at-end --show-version -Dorg.slf4j.simpleLogger.showDateTime=true
 RUN mkdir exploded-jar && cd exploded-jar && java -Djarmode=layertools -jar ../target/notification-reader.jar extract
 
