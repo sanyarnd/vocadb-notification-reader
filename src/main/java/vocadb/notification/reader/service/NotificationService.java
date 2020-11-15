@@ -21,6 +21,7 @@ import vocadb.notification.reader.client.model.user.UserMessageContract;
 import vocadb.notification.reader.client.query.LanguagePreference;
 import vocadb.notification.reader.client.query.OptionalFields;
 import vocadb.notification.reader.service.dto.NotificationType;
+import vocadb.notification.reader.service.dto.NotificationsDto;
 import vocadb.notification.reader.service.dto.PV;
 import vocadb.notification.reader.service.dto.SongNotificationType;
 import vocadb.notification.reader.service.dto.Tag;
@@ -49,33 +50,33 @@ public class NotificationService {
         return Mono.fromCompletionStage(client.userApi().deleteMessages(userId, notificationIds));
     }
 
-    public CompletableFuture<Pair<Collection<Notification>, Integer>> loadNotifications(
-            int userId,
-            int startOffset,
-            int maxResults,
-            List<String> authCookies,
-            LanguagePreference languagePreference
+    public Mono<NotificationsDto> loadNotifications(
+        int userId,
+        int startOffset,
+        int maxResults,
+        List<String> authCookies,
+        LanguagePreference languagePreference
     ) {
         var client = clientProvider.getObject();
         client.setCookies(authCookies);
 
-        return client.userApi()
-                .getMessages(userId, Inbox.NOTIFICATIONS, null, null, startOffset, maxResults, true)
-                .toCompletableFuture()
-                .thenApply(r -> {
-                    Integer totalCount = r.totalCount();
-                    if (r.items() == null) {
-                        return Pair.of(emptyList(), 0);
-                    }
+        return Mono.fromCompletionStage(client.userApi()
+            .getMessages(userId, Inbox.NOTIFICATIONS, null, null, startOffset, maxResults, true)
+            .toCompletableFuture()
+            .thenApply(r -> {
+                Integer totalCount = r.totalCount();
+                if (r.items() == null) {
+                    return new NotificationsDto(emptyList(), 0);
+                }
 
-                    List<Notification> msgStream = Stream.ofNullable(r.items()).flatMap(Collection::stream)
-                            .map(msg -> client.userApi().getMessage(msg.id()).toCompletableFuture())
-                            .map(msg -> toNotification(msg, client, languagePreference))
-                            .map(CompletableFuture::join)
-                            .collect(Collectors.toList());
+                List<Notification> msgStream = Stream.ofNullable(r.items()).flatMap(Collection::stream)
+                    .map(msg -> client.userApi().getMessage(msg.id()).toCompletableFuture())
+                    .map(msg -> toNotification(msg, client, languagePreference))
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
 
-                    return Pair.of(msgStream, totalCount);
-                });
+                return new NotificationsDto(msgStream, totalCount);
+            }));
     }
 
     private CompletableFuture<? extends Notification> toNotification(

@@ -1,4 +1,4 @@
-package vocadb.notification.reader.web.dto;
+package vocadb.notification.reader.service.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Collection;
