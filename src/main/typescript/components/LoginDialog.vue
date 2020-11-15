@@ -47,19 +47,19 @@
 <script lang="ts">
 import Vue from "vue";
 import { Component, Watch } from "vue-property-decorator";
-import { PreferredLoginService, userModule } from "@/plugins/store/user-module";
+import { LoginType, userModule } from "@/plugins/store/user-module";
 
 @Component
 export default class extends Vue {
   private userStore = userModule.context(this.$store);
 
-  private readonly loginServices: Array<PreferredLoginService> = [
+  private readonly loginServices: Array<LoginType> = [
     "VOCADB",
-    "UTAITE",
-    "TOUHOU"
+    "UTAITEDB",
+    "TOUHOUDB"
   ];
-  private selectedPreferredLoginService: PreferredLoginService = this.userStore
-    .getters.preferredLoginService;
+  private selectedPreferredLoginService: LoginType = this.userStore.getters
+    .loginType;
 
   private valid = false;
 
@@ -91,7 +91,7 @@ export default class extends Vue {
     this.errorMessage = "";
   }
 
-  setPreferredLoginService(value: PreferredLoginService): void {
+  setPreferredLoginService(value: LoginType): void {
     this.userStore.actions.setPreferredLoginService(value);
   }
 
@@ -103,7 +103,7 @@ export default class extends Vue {
       await this.userStore.actions.authenticate({
         username: this.username,
         password: this.password,
-        loginService: this.selectedPreferredLoginService
+        loginType: this.selectedPreferredLoginService
       });
 
       // if everything is ok, redirect

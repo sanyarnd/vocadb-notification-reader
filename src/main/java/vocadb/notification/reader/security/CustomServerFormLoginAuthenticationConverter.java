@@ -11,7 +11,7 @@ import reactor.core.publisher.Mono;
  * Custom form handler, supports additional data
  */
 public class CustomServerFormLoginAuthenticationConverter extends ServerFormLoginAuthenticationConverter {
-    public static final String LOGIN_SERVICE_FIELD = "login-service";
+    public static final String LOGIN_TYPE_FIELD = "login-type";
 
     @Override
     @SuppressWarnings("ReturnCount")
@@ -19,25 +19,25 @@ public class CustomServerFormLoginAuthenticationConverter extends ServerFormLogi
         Mono<UsernamePasswordAuthenticationToken> token = super.convert(exchange)
             .map(a -> (UsernamePasswordAuthenticationToken) a);
 
-        Mono<LoginService> loginService = exchange.getFormData()
+        Mono<LoginType> loginService = exchange.getFormData()
             .flatMap(formData -> {
-                String loginServiceField = formData.getFirst(LOGIN_SERVICE_FIELD);
-                if (loginServiceField == null) {
+                String loginTypeField = formData.getFirst(LOGIN_TYPE_FIELD);
+                if (loginTypeField == null) {
                     return Mono.empty();
                 }
                 try {
-                    return Mono.just(LoginService.valueOf(loginServiceField));
+                    return Mono.just(LoginType.valueOf(loginTypeField));
                 } catch (IllegalArgumentException ex) {
                     return Mono.empty();
                 }
             })
             .switchIfEmpty(Mono.error(() ->
-                new AuthenticationServiceException("Missing '" + LOGIN_SERVICE_FIELD + "' field")));
+                new AuthenticationServiceException("Missing '" + LOGIN_TYPE_FIELD + "' field")));
 
         return loginService.zipWith(token)
             .map(t -> {
                     UsernamePasswordAuthenticationToken authenticationToken = t.getT2();
-                    LoginService authority = t.getT1();
+                    LoginType authority = t.getT1();
                     return new CustomUsernamePasswordAuthenticationToken(
                         authenticationToken.getPrincipal(),
                         authenticationToken.getCredentials(),

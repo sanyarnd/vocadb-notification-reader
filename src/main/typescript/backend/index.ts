@@ -7,8 +7,8 @@ export const api = {
   async authenticate(payload: AuthenticationPayload): Promise<void> {
     const encPass = encodeURIComponent(payload.password);
     const encName = encodeURIComponent(payload.username);
-    const encService = encodeURIComponent(payload.loginService);
-    const data = `username=${encName}&password=${encPass}&login-service=${encService}`;
+    const encLoginType = encodeURIComponent(payload.loginType);
+    const data = `username=${encName}&password=${encPass}&login-type=${encLoginType}`;
 
     return axios.post("/api/login/authentication", data, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" }

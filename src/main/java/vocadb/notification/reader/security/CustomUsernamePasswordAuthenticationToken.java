@@ -7,15 +7,15 @@ import org.springframework.security.core.GrantedAuthority;
 
 @Getter
 public class CustomUsernamePasswordAuthenticationToken extends UsernamePasswordAuthenticationToken {
-    private final LoginService loginService;
+    private final LoginType loginType;
 
     public CustomUsernamePasswordAuthenticationToken(
             Object principal,
             Object credentials,
             Collection<? extends GrantedAuthority> authorities,
-            LoginService loginService
+            LoginType loginType
     ) {
         super(principal, credentials, authorities);
-        this.loginService = loginService;
+        this.loginType = loginType;
     }
 }

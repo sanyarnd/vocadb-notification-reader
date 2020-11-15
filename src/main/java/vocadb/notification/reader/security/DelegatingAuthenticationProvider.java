@@ -34,34 +34,34 @@ public class DelegatingAuthenticationProvider implements ReactiveAuthenticationM
 
         String username = auth.getName();
         String credentials = (String) auth.getCredentials();
-        LoginService loginService = auth.loginService();
+        LoginType loginType = auth.loginType();
 
-        final BaseClient client = getClient(loginService);
+        final BaseClient client = getClient(loginType);
         return Mono.fromCompletionStage(client.authenticate(username, credentials))
             .flatMap(isAuthenticated -> isAuthenticated
                 ? Mono.fromCompletionStage(client.userApi().getCurrentUser(Collections.emptyList()))
                 : Mono.error(() -> new BadCredentialsException("Bad credentials")))
             .map(u -> {
-                List<GrantedAuthority> userAuthorities = List.of(loginService);
+                List<GrantedAuthority> userAuthorities = List.of(loginType);
                 SecurityPrincipal p = new SecurityPrincipal(u, List.copyOf(client.cookies()), userAuthorities);
                 return new UsernamePasswordAuthenticationToken(p, p.getPassword(), p.getAuthorities());
             });
     }
 
-    private BaseClient getClient(LoginService loginService) {
+    private BaseClient getClient(LoginType loginType) {
         final BaseClient client;
-        switch (loginService) {
+        switch (loginType) {
             case VOCADB:
                 client = vocaDbClientProvider.getObject();
                 break;
-            case TOUHOU:
+            case TOUHOUDB:
                 client = touhouDbClientProvider.getObject();
                 break;
-            case UTAITE:
+            case UTAITEDB:
                 client = utaiteDbClientProvider.getObject();
                 break;
             default:
-                throw new IllegalStateException("Unexpected value: " + loginService);
+                throw new IllegalStateException("Unexpected value: " + loginType);
         }
         return client;
     }
