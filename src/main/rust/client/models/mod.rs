@@ -1,0 +1,16 @@
+pub mod activity;
+pub mod album;
+pub mod archived;
+pub mod artist;
+pub mod discussion;
+pub mod entrythumb;
+pub mod language;
+pub mod misc;
+pub mod pv;
+pub mod query;
+pub mod releaseevent;
+pub mod song;
+pub mod status;
+pub mod tag;
+pub mod user;
+pub mod weblink;
