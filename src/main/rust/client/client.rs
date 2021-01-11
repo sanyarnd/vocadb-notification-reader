@@ -57,6 +57,9 @@ impl<'a> Client<'a> {
 
     pub fn default_client(&self) -> actix_web::client::Client {
         return actix_web::client::Client::builder()
+            .connector(actix_web::client::Connector::new()
+                .timeout(Duration::from_secs(30))
+                .finish())
             .timeout(Duration::from_secs(30))
             .finish();
     }
