@@ -3,7 +3,9 @@
     <template #activator="{ on }">
       <v-btn depressed small color="primary" v-on="on">
         <v-icon left>mdi-counter</v-icon>
-        {{ $vuetify.lang.t("$vuetify.buttons.itemsPerPage") + ": " + itemsPerPage }}
+        {{
+          $vuetify.lang.t("$vuetify.buttons.itemsPerPage") + ": " + itemsPerPage
+        }}
         <v-icon right>mdi-menu-down</v-icon>
       </v-btn>
     </template>

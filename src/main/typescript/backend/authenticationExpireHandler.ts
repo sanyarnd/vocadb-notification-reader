@@ -1,5 +1,5 @@
-import {accountModule} from "@/plugins/store/account-module";
-import {store} from "@/plugins/store";
+import { accountModule } from "@/plugins/store/account-module";
+import { store } from "@/plugins/store";
 
 export function authenticationExpireHandler(): void {
   if (window.location.pathname.startsWith("/login")) return;
