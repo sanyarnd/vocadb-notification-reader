@@ -27,6 +27,7 @@ export const api = {
   },
 
   async deleteNotifications(notificationIds: Array<number>): Promise<void> {
-    return axios.delete(`/api/v1/notifications?notificationIds=${notificationIds}`);
+    const payload = { ids: notificationIds };
+    return axios.post("/api/notifications/delete", payload);
   }
 };

@@ -126,8 +126,8 @@ impl<'a> Client<'a> {
     }
 
     async fn http_delete<T>(&self, url: &String, query: &Vec<(&str, String)>) -> Result<T>
-    where
-        T: DeserializeOwned,
+        where
+            T: DeserializeOwned,
     {
         let request = self.create_request(url, Method::DELETE);
         let body = request.query(query)?.send().await?.body().await?;
@@ -135,12 +135,24 @@ impl<'a> Client<'a> {
         return Ok(json);
     }
 
+    async fn http_delete_void(&self, url: &String, query: &Vec<(&str, String)>) -> Result<()>
+    {
+        let request = self.create_request(url, Method::DELETE);
+        let body = request.query(query)?.send().await?.status();
+        return if body.is_success() {
+            Ok(())
+        } else {
+            Err(ClientError::ResponseError)
+        }
+    }
+
+
     pub async fn current_user(&self) -> Result<UserForApiContract> {
         self.http_get(
             &format!("{}/api/users/current", self.base_url),
             &vec![("fields", OptionalFields::MainPicture.to_string())],
         )
-        .await
+            .await
     }
 
     pub async fn get_messages(
@@ -176,7 +188,7 @@ impl<'a> Client<'a> {
     pub async fn delete_messages(&self, user_id: i32, message_ids: &Vec<i32>) -> Result<()> {
         log::info!("Delete messages by IDs: {:?}", message_ids);
 
-        self.http_delete(
+        self.http_delete_void(
             &format!("{}/api/users/{}/messages", self.base_url, user_id),
             &message_ids
                 .iter()
