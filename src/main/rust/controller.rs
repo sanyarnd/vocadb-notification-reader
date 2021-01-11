@@ -68,7 +68,7 @@ pub async fn get_notifications(
     req: HttpRequest,
     payload: Json<NotificationsFetchRequest>,
 ) -> Result<Json<NotificationsFetchResponse>, AppError> {
-    if payload.start_offset < 0 || payload.max_results < 0 || payload.max_results > 75 {
+    if payload.start_offset < 0 || payload.max_results < 0 || payload.max_results > 100 {
         return Err(AppError::ConstraintViolationError);
     }
 
