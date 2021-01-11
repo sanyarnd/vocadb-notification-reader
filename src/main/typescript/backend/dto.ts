@@ -1,9 +1,14 @@
-import { LoginType } from "@/plugins/store/user-module";
+export const loginDatabaseData = ["VocaDb", "TouhouDb", "UtaiteDb"] as const;
+export type LoginDatabase = typeof loginDatabaseData[number];
 
 export interface AuthenticationPayload {
   username: string;
   password: string;
-  loginType: LoginType;
+  database: LoginDatabase;
+}
+
+export interface AccessToken {
+  token: string;
 }
 
 export type VocaDbNotification = SongNotification | UnknownNotification;
@@ -16,7 +21,7 @@ export type NotificationType =
   | "SongNotification"
   | "UnknownNotification";
 
-export type SongNotificationType = "NEW" | "TAGGED";
+export type SongNotificationType = "New" | "Tagged";
 export type PvType = "Original" | "Reprint" | "Other";
 
 export const songTypeData = [
@@ -72,8 +77,19 @@ export interface Tag {
 }
 
 export interface AccountData {
-  vocaDbId: number;
-  username: string;
+  id: number;
+  name: string;
+  active: boolean;
+  memberSince: Date;
+  verifiedArtist: boolean;
+  groupId: string;
+  mainPicture: MainPicture;
+}
+
+export interface MainPicture {
+  urlSmallThumb: string;
+  urlThumb: string;
+  urlTinyThumb: string;
 }
 
 export interface NotificationsDTO {

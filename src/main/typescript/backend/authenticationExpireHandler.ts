@@ -1,4 +1,8 @@
+import {accountModule} from "@/plugins/store/account-module";
+import {store} from "@/plugins/store";
+
 export function authenticationExpireHandler(): void {
   if (window.location.pathname.startsWith("/login")) return;
-  window.location.href = "/login";
+  const userSettings = accountModule.context(store);
+  userSettings.actions.logout();
 }

@@ -21,31 +21,31 @@
 
 <script lang="ts">
 import { Component, Vue } from "vue-property-decorator";
-import { LocaleCode, settingsModule } from "@/plugins/store/settings-module";
+import { Locale, settingsModule } from "@/plugins/store/settings-module";
 
 @Component
 export default class extends Vue {
   private readonly settingsStore = settingsModule.context(this.$store);
 
-  private readonly locales: Array<Locale> = [
+  private readonly locales: Array<TranslatableLocale> = [
     { code: "en", text: "English" },
     { code: "ja", text: "日本語" },
     { code: "ru", text: "Русский" }
   ];
 
-  get locale(): Locale {
-    const locale = this.settingsStore.getters.locale;
+  get locale(): TranslatableLocale {
+    const locale: Locale = this.settingsStore.getters.locale;
     const find = this.locales.find(x => x.code === locale);
     return find === undefined ? this.locales?.[0] : find;
   }
 
-  setLocale(locale: LocaleCode): void {
+  setLocale(locale: Locale): void {
     this.settingsStore.actions.setLocale(locale);
   }
 }
 
-interface Locale {
-  code: LocaleCode;
+interface TranslatableLocale {
+  code: Locale;
   text: string;
 }
 </script>

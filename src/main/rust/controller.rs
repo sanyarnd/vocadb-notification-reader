@@ -21,7 +21,9 @@ use crate::service::notifications::load_notification_details;
 
 #[derive(Deserialize, Debug)]
 pub struct NotificationsFetchRequest {
+    #[serde(rename = "startOffset")]
     pub start_offset: i32,
+    #[serde(rename = "maxResults")]
     pub max_results: i32,
     pub language: LanguagePreference,
 }
@@ -29,6 +31,7 @@ pub struct NotificationsFetchRequest {
 #[derive(Serialize)]
 pub struct NotificationsFetchResponse {
     pub notifications: Vec<Box<dyn Notification>>,
+    #[serde(rename = "totalCount")]
     pub total_count: i32,
 }
 

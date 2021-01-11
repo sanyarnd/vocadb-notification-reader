@@ -18,13 +18,18 @@
       @keyup.enter="valid ? submit() : true"
     />
 
-    <v-select
-      v-model="selectedPreferredLoginService"
-      :items="loginServices"
-      label="Login to..."
-      solo
-      @change="setPreferredLoginService"
-    ></v-select>
+    <v-select v-model="selectedLoginDatabase" :items="loginDatabases" solo>
+      <template #selection="data">
+        {{
+          $vuetify.lang.t(`$vuetify.login.database.${data.item.toLowerCase()}`)
+        }}
+      </template>
+      <template #item="data">
+        {{
+          $vuetify.lang.t(`$vuetify.login.database.${data.item.toLowerCase()}`)
+        }}
+      </template>
+    </v-select>
 
     <v-btn :disabled="!valid" :loading="loginInProgress" block @click="submit">
       <v-avatar tile size="24px">
@@ -32,7 +37,9 @@
       </v-avatar>
       {{
         $vuetify.lang.t("$vuetify.login.loginWith") +
-        selectedPreferredLoginService
+        $vuetify.lang.t(
+          `$vuetify.login.database.${selectedLoginDatabase.toLowerCase()}`
+        )
       }}
     </v-btn>
     <v-snackbar v-model="showError" color="red" transition="scale-transition">
@@ -47,19 +54,15 @@
 <script lang="ts">
 import Vue from "vue";
 import { Component, Watch } from "vue-property-decorator";
-import { LoginType, userModule } from "@/plugins/store/user-module";
+import { accountModule } from "@/plugins/store/account-module";
+import { LoginDatabase, loginDatabaseData } from "@/backend/dto";
 
 @Component
 export default class extends Vue {
-  private userStore = userModule.context(this.$store);
+  private accountStore = accountModule.context(this.$store);
 
-  private readonly loginServices: Array<LoginType> = [
-    "VOCADB",
-    "UTAITEDB",
-    "TOUHOUDB"
-  ];
-  private selectedPreferredLoginService: LoginType = this.userStore.getters
-    .loginType;
+  private readonly loginDatabases = loginDatabaseData;
+  private selectedLoginDatabase: LoginDatabase = loginDatabaseData[0];
 
   private valid = false;
 
@@ -91,36 +94,25 @@ export default class extends Vue {
     this.errorMessage = "";
   }
 
-  setPreferredLoginService(value: LoginType): void {
-    this.userStore.actions.setPreferredLoginService(value);
-  }
-
   private async submit() {
     this.loginInProgress = true;
     this.resetErrorState();
 
     try {
-      await this.userStore.actions.authenticate({
+      await this.accountStore.actions.authenticate({
         username: this.username,
         password: this.password,
-        loginType: this.selectedPreferredLoginService
+        database: this.selectedLoginDatabase
       });
-
-      // if everything is ok, redirect
-      const redirectUrl: string | null = new URLSearchParams(
-        location.search
-      ).get("redirect_url");
-      window.location.href = redirectUrl ? redirectUrl : "/home";
+      window.location.href = "/home";
     } catch (e) {
       this.showError = true;
 
-      if (e.response != undefined && e.response.status == 401) {
-        this.errorMessage = this.$vuetify.lang.t(
-          "$vuetify.login.badCredentials"
-        );
-      } else {
-        this.errorMessage = this.$vuetify.lang.t("$vuetify.connectionError");
-      }
+      this.errorMessage = this.$vuetify.lang.t(
+        e.response != undefined && e.response.status == 401
+          ? "$vuetify.login.badCredentials"
+          : "$vuetify.connectionError"
+      );
     } finally {
       this.loginInProgress = false;
     }

@@ -14,12 +14,12 @@
 <script lang="ts">
 import Vue from "vue";
 import { Component, Prop } from "vue-property-decorator";
-import SwitchButtonTheme from "@/components/SwitchButtonTheme.vue";
-import LogoutButton from "@/components/LogoutButton.vue";
-import SwitchButtonPreferredLanguage from "@/components/SwitchButtonPreferredLanguage.vue";
-import SwitchButtonLocale from "@/components/SwitchButtonLocale.vue";
-import SwitchButtonItemsPerPage from "@/components/SwitchButtonItemsPerPage.vue";
-import SwitchButtonPreferredService from "@/components/SwitchButtonPreferredService.vue";
+import SwitchButtonTheme from "@/components/buttons/SwitchButtonTheme.vue";
+import LogoutButton from "@/components/buttons/LogoutButton.vue";
+import SwitchButtonPreferredLanguage from "@/components/buttons/SwitchButtonPreferredLanguage.vue";
+import SwitchButtonLocale from "@/components/buttons/SwitchButtonLocale.vue";
+import SwitchButtonItemsPerPage from "@/components/buttons/SwitchButtonItemsPerPage.vue";
+import SwitchButtonPreferredService from "@/components/buttons/SwitchButtonPreferredService.vue";
 
 @Component({
   components: {

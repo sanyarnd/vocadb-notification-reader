@@ -16,6 +16,12 @@ export default {
     passwordRequired: "Password is required",
     loginWith: "Login with ",
 
+    database: {
+      vocadb: "VocaDB",
+      utaitedb: "UtaiteDB",
+      touhoudb: "TouhouDB"
+    },
+
     badCredentials: "Incorrect username or password"
   },
 
@@ -29,6 +35,10 @@ export default {
       event: "Event",
       unknown: "Unknown"
     }
+  },
+
+  buttons: {
+    itemsPerPage: "Items per page"
   },
 
   preferredLanguage: {

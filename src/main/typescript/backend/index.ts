@@ -1,40 +1,29 @@
 import { axios } from "@/backend/axios";
-import { AccountData, AuthenticationPayload, NotificationsDTO } from "@/backend/dto";
-import { PreferredLanguage } from "@/plugins/store/user-module";
+import { AccountData, AuthenticationPayload, AccessToken, NotificationsDTO } from "@/backend/dto";
+import { RequestLanguage } from "@/plugins/store/settings-module";
 import { AxiosResponse } from "axios";
 
 export const api = {
-  async authenticate(payload: AuthenticationPayload): Promise<void> {
-    const encPass = encodeURIComponent(payload.password);
-    const encName = encodeURIComponent(payload.username);
-    const encLoginType = encodeURIComponent(payload.loginType);
-    const data = `username=${encName}&password=${encPass}&login-type=${encLoginType}`;
-
-    return axios.post("/api/login/authentication", data, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }
-    });
+  async authenticate(payload: AuthenticationPayload): Promise<AccessToken> {
+    return axios.post("/api/login", payload).then(value => value.data);
   },
 
   async accountData(): Promise<AccountData> {
-    return axios.get<AccountData>("/api/v1/account").then(value => value.data);
-  },
-
-  async logout(): Promise<void> {
-    return axios.post("/api/logout");
+    return axios.post<AccountData>("/api/users/current").then(value => value.data);
   },
 
   getNotifications(
     maxResults: number,
     startOffset: number,
-    preferredLanguage: PreferredLanguage
+    preferredLanguage: RequestLanguage
   ): Promise<AxiosResponse<NotificationsDTO>> {
-    return axios.get<NotificationsDTO>("/api/v1/notifications", {
-      params: {
-        startOffset: startOffset,
-        maxResults: maxResults,
-        languagePreference: preferredLanguage
-      }
-    });
+    const payload = {
+      startOffset: startOffset,
+      maxResults: maxResults,
+      language: preferredLanguage
+    };
+
+    return axios.post<NotificationsDTO>("/api/notifications/fetch", payload);
   },
 
   async deleteNotifications(notificationIds: Array<number>): Promise<void> {

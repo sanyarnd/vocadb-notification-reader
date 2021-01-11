@@ -30,7 +30,7 @@ async fn main() -> std::io::Result<()> {
                     )
                     .route(
                         "/users/current",
-                        web::get().to(controller::get_current_user),
+                        web::post().to(controller::get_current_user),
                     ),
             )
     })

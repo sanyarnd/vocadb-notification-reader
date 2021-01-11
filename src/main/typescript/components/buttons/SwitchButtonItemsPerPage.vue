@@ -3,8 +3,7 @@
     <template #activator="{ on }">
       <v-btn depressed small color="primary" v-on="on">
         <v-icon left>mdi-counter</v-icon>
-        Items per page:
-        {{ itemsPerPage }}
+        {{ $vuetify.lang.t("$vuetify.buttons.itemsPerPage") + ": " + itemsPerPage }}
         <v-icon right>mdi-menu-down</v-icon>
       </v-btn>
     </template>
@@ -25,21 +24,20 @@ import { Component, Vue } from "vue-property-decorator";
 import {
   ItemsPerPage,
   itemsPerPageData,
-  userModule
-} from "@/plugins/store/user-module";
+  settingsModule
+} from "@/plugins/store/settings-module";
 
 @Component
 export default class extends Vue {
-  private readonly userStore = userModule.context(this.$store);
-
+  private readonly settingsStore = settingsModule.context(this.$store);
   private readonly items = itemsPerPageData;
 
   get itemsPerPage(): ItemsPerPage {
-    return this.userStore.getters.itemsPerPage;
+    return this.settingsStore.getters.itemsPerPage;
   }
 
   setItemsPerPage(value: ItemsPerPage): void {
-    this.userStore.actions.setItemsPerPage(value);
+    this.settingsStore.actions.setItemsPerPage(value);
   }
 }
 </script>

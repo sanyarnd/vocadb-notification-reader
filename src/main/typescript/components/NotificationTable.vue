@@ -126,12 +126,10 @@ import {
   Tag,
   VocaDbNotification
 } from "@/backend/dto";
-import { userModule } from "@/plugins/store/user-module";
-import { LocaleCode, settingsModule } from "@/plugins/store/settings-module";
+import { Locale, settingsModule } from "@/plugins/store/settings-module";
 
 @Component({ components: { SongNotificationPopup } })
 export default class extends Vue {
-  private readonly userStore = userModule.context(this.$store);
   private readonly settingsStore = settingsModule.context(this.$store);
 
   private markdownUrlDescriptionPattern = new RegExp("\\[(.*)\\]\\((.*)\\)");
@@ -157,29 +155,29 @@ export default class extends Vue {
     this.fetchNotifications(1);
   }
 
-  get locale(): LocaleCode {
+  get locale(): Locale {
     return this.settingsStore.getters.locale;
   }
 
   get itemsPerPage(): number {
-    return this.userStore.getters.itemsPerPage;
+    return this.settingsStore.getters.itemsPerPage;
   }
 
-  @Watch("userStore.getters.preferredLanguage")
+  @Watch("settingsStore.getters.preferredLanguage")
   onLocaleChange(): void {
     this.fetchNotifications(this.page);
   }
 
-  @Watch("userStore.getters.itemsPerPage")
+  @Watch("settingsStore.getters.itemsPerPage")
   onItemsPerPageChange(): void {
     this.changePage(1);
   }
 
   private iconForType(type: SongNotificationType): string {
     switch (type) {
-      case "NEW":
+      case "New":
         return "mdi-music";
-      case "TAGGED":
+      case "Tagged":
         return "mdi-tag-text";
     }
   }
@@ -280,7 +278,7 @@ export default class extends Vue {
   async fetchNotifications(previousPage: number): Promise<void> {
     this.loading = true;
     try {
-      const preferredLanguage = this.userStore.getters.preferredLanguage;
+      const preferredLanguage = this.settingsStore.getters.preferredLanguage;
       const response = await api.getNotifications(
         this.itemsPerPage,
         this.itemsPerPage * (this.page - 1),

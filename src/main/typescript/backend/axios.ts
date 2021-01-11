@@ -1,12 +1,19 @@
 import originalAxios from "axios";
 import { authenticationExpireHandler } from "@/backend/authenticationExpireHandler";
 
+import { store } from "@/plugins/store";
+import { accountModule } from "@/plugins/store/account-module";
+
 export const axios = originalAxios.create({
   timeout: 45 * 1000 // 45s
 });
 
 axios.interceptors.request.use(
-  value => value,
+  value => {
+    const userSettings = accountModule.context(store);
+    value.headers["Authorization"] = `Bearer ${userSettings.state.accessToken}`;
+    return value;
+  },
   error => Promise.reject(error)
 );
 axios.interceptors.response.use(

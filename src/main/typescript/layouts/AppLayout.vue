@@ -1,11 +1,11 @@
 <template>
   <v-app>
     <the-app-bar authenticated />
-    <v-content>
+    <v-main>
       <v-container fluid>
         <router-view></router-view>
       </v-container>
-    </v-content>
+    </v-main>
   </v-app>
 </template>
 

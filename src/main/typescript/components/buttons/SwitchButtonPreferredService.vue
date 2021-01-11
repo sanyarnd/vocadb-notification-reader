@@ -21,20 +21,20 @@
 
 <script lang="ts">
 import { Component, Vue } from "vue-property-decorator";
-import { userModule } from "@/plugins/store/user-module";
+import { settingsModule } from "@/plugins/store/settings-module";
 import { PvService, pvServiceData } from "@/backend/dto";
 
 @Component
 export default class extends Vue {
-  private readonly userStore = userModule.context(this.$store);
+  private readonly userStore = settingsModule.context(this.$store);
   private readonly preferredServices = pvServiceData;
 
   get preferredService(): PvService {
-    return this.userStore.getters.preferredService;
+    return this.userStore.getters.preferredPvService;
   }
 
   setPreferredService(value: PvService): void {
-    this.userStore.actions.setPreferredService(value);
+    this.userStore.actions.setPreferredPvService(value);
   }
 }
 </script>

@@ -71,7 +71,7 @@
 <script lang="ts">
 import Vue from "vue";
 import { Component, Prop, Watch } from "vue-property-decorator";
-import { LocaleCode, settingsModule } from "@/plugins/store/settings-module";
+import { Locale, settingsModule } from "@/plugins/store/settings-module";
 import {
   PV,
   PvService,
@@ -80,7 +80,6 @@ import {
   VocaDbNotification
 } from "@/backend/dto";
 import { stringToColor } from "@/utils";
-import { userModule } from "@/plugins/store/user-module";
 
 @Component
 export default class extends Vue {
@@ -99,7 +98,6 @@ export default class extends Vue {
   ) => void;
 
   private readonly settingsStore = settingsModule.context(this.$store);
-  private readonly userStore = userModule.context(this.$store);
 
   private selectedPv = 0;
 
@@ -108,12 +106,12 @@ export default class extends Vue {
     if (value) {
       const id = this.notificationPvs
         .map(pv => pv.service)
-        .indexOf(this.userStore.getters.preferredService);
+        .indexOf(this.settingsStore.getters.preferredPvService);
       if (id !== -1) this.selectedPv = id;
     }
   }
 
-  get locale(): LocaleCode {
+  get locale(): Locale {
     return this.settingsStore.getters.locale;
   }
 

@@ -2,7 +2,7 @@ import Vue from "vue";
 import Vuex from "vuex";
 import { createStore, Module } from "vuex-smart-module";
 import createPersistedState from "vuex-persistedstate";
-import { userModule } from "@/plugins/store/user-module";
+import { accountModule } from "@/plugins/store/account-module";
 import { settingsModule } from "@/plugins/store/settings-module";
 import { vuetify } from "@/plugins/vuetify";
 
@@ -10,17 +10,13 @@ Vue.use(Vuex);
 
 const root = new Module({
   modules: {
-    userModule: userModule,
+    accountModule: accountModule,
     settingsModule: settingsModule
   }
 });
 
 export const store = createStore(root, {
-  plugins: [
-    createPersistedState({
-      key: "cachedState"
-    })
-  ],
+  plugins: [createPersistedState({ key: "state" })],
   strict: process.env.NODE_ENV !== "production"
 });
 

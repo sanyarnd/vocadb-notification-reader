@@ -1,5 +1,7 @@
 use actix_web::{http::StatusCode, HttpResponse};
 
+use crate::client::errors::ClientError;
+
 #[derive(derive_more::Display, Debug)]
 pub enum AppError {
     #[display(fmt = "An error occurred during a remote call")]
@@ -27,7 +29,12 @@ pub struct ErrorResponse {
 impl actix_web::error::ResponseError for AppError {
     fn status_code(&self) -> StatusCode {
         match *self {
-            Self::WebClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::WebClientError(ref client_error) => match client_error {
+                ClientError::BadCredentialsError => StatusCode::UNAUTHORIZED,
+                ClientError::ResponseError => StatusCode::INTERNAL_SERVER_ERROR,
+                ClientError::ConnectionError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                ClientError::BadArgumentError => StatusCode::BAD_REQUEST
+            },
             Self::BadCredentialsError => StatusCode::UNAUTHORIZED,
             Self::InternalServiceError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstraintViolationError => StatusCode::BAD_REQUEST,
@@ -46,13 +53,13 @@ impl actix_web::error::ResponseError for AppError {
 }
 
 impl From<actix_web::error::ParseError> for AppError {
-    fn from(err: actix_web::error::ParseError) -> AppError {
+    fn from(_err: actix_web::error::ParseError) -> AppError {
         AppError::InternalServiceError
     }
 }
 
 impl From<jsonwebtoken::errors::Error> for AppError {
-    fn from(err: jsonwebtoken::errors::Error) -> AppError {
+    fn from(_err: jsonwebtoken::errors::Error) -> AppError {
         AppError::BadCredentialsError
     }
 }
@@ -64,13 +71,13 @@ impl From<crate::client::errors::ClientError> for AppError {
 }
 
 impl From<regex::Error> for AppError {
-    fn from(err: regex::Error) -> AppError {
+    fn from(_err: regex::Error) -> AppError {
         AppError::InternalServiceError
     }
 }
 
 impl From<std::num::ParseIntError> for AppError {
-    fn from(err: std::num::ParseIntError) -> AppError {
+    fn from(_err: std::num::ParseIntError) -> AppError {
         AppError::InternalServiceError
     }
 }

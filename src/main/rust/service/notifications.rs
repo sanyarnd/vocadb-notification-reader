@@ -51,8 +51,8 @@ pub async fn load_notification_details<'a>(
 fn report_notification(message: &UserMessageContract) -> Box<Report> {
     Box::new(Report {
         id: message.id,
-        subject: message.subject.clone(),
-        body: message.body.clone(),
+        original_subject: message.subject.clone(),
+        original_body: message.body.clone(),
         created_date: message.created_formatted.clone(),
     })
 }
@@ -60,8 +60,8 @@ fn report_notification(message: &UserMessageContract) -> Box<Report> {
 fn album_notification(message: &UserMessageContract) -> Box<Album> {
     Box::new(Album {
         id: message.id,
-        subject: message.subject.clone(),
-        body: message.body.clone(),
+        original_subject: message.subject.clone(),
+        original_body: message.body.clone(),
         created_date: message.created_formatted.clone(),
     })
 }
@@ -69,8 +69,8 @@ fn album_notification(message: &UserMessageContract) -> Box<Album> {
 fn event_notification(message: &UserMessageContract) -> Box<Event> {
     Box::new(Event {
         id: message.id,
-        subject: message.subject.clone(),
-        body: message.body.clone(),
+        original_subject: message.subject.clone(),
+        original_body: message.body.clone(),
         created_date: message.created_formatted.clone(),
     })
 }
@@ -78,8 +78,8 @@ fn event_notification(message: &UserMessageContract) -> Box<Event> {
 fn artist_notification(message: &UserMessageContract) -> Box<Artist> {
     Box::new(Artist {
         id: message.id,
-        subject: message.subject.clone(),
-        body: message.body.clone(),
+        original_subject: message.subject.clone(),
+        original_body: message.body.clone(),
         created_date: message.created_formatted.clone(),
     })
 }
@@ -126,8 +126,8 @@ async fn song_notification<'a>(
 
     Ok(Box::new(Song {
         id: message.id,
-        subject: message.subject.clone(),
-        body: message.body.clone(),
+        original_subject: message.subject.clone(),
+        original_body: message.body.clone(),
         created_date: message.created_formatted.clone(),
         song_notification_type,
         song_id,
@@ -143,8 +143,8 @@ async fn song_notification<'a>(
 fn unknown_notification(message: &UserMessageContract) -> Box<dyn Notification> {
     return Box::new(Unknown {
         id: message.id,
-        subject: message.subject.clone(),
-        body: message.body.clone(),
+        original_subject: message.subject.clone(),
+        original_body: message.body.clone(),
         created_date: message.created_formatted.clone(),
     });
 }
