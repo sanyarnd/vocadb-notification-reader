@@ -27,7 +27,11 @@ pub async fn load_notification_details<'a>(
     return Ok(match captures {
         None => unknown_notification(&message),
         Some(captures) => {
-            let notification_type = captures.get(1).map(|t| t.as_str());
+            let notification_type = if message.subject.contains("Entry report") {
+                Some("R")
+            } else {
+                captures.get(1).map(|t| t.as_str())
+            };
             let id = captures.get(2).map(|id| id.as_str());
 
             match notification_type {
