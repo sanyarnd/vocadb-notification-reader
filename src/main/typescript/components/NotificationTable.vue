@@ -1,84 +1,99 @@
 <template>
-  <v-card>
-    <v-tabs
-      v-model="selectedTab"
-      centered
-      grow
-      @change="updateTabNotifications"
-    >
-      <v-tab v-for="tabType in tabs" :key="tabType">
-        <v-badge
-          inline
-          :color="tabColor(tabType)"
-          :content="tabNotificationCount(tabType)"
-        >
-          <v-icon>{{ tabIcon(tabType) }}</v-icon>
-          {{ $vuetify.lang.t(`$vuetify.notification.type.${tabType}`) }}
-        </v-badge>
-      </v-tab>
-    </v-tabs>
-
-    <v-data-table
-      v-model="selected"
-      item-key="id"
-      :headers="selectedTabHeaders"
-      :items="tabNotifications"
-      :search="searchQuery"
-      :custom-filter="customTableFilter"
-      :items-per-page="itemsPerPage"
-      :loading="loading || deleteInProgress"
-      height="calc(100vh - 263px)"
-      fixed-header
-      show-select
-      hide-default-footer
-      @click:row="notificationSelectHandle"
-    >
-      <template #top>
-        <v-text-field
-          v-model="searchQuery"
-          :label="$vuetify.lang.t('$vuetify.notification.search')"
-          :disabled="loading"
-          filled
-          clearable
-          hide-details
-        />
-      </template>
-      <template #[`item.type`]="{ item }">
-        <v-chip color="primary">
-          <v-icon>{{ iconForType(item.type) }}</v-icon>
-        </v-chip>
-      </template>
-      <template #[`item.tags`]="{ item }">
-        <v-chip-group column>
-          <v-chip
-            v-for="tag in item.tags"
-            :key="tag.name"
-            outlined
-            :color="stringToColor(tag.name)"
-            @click.stop="searchQuery = tag.name"
+  <div class="text-center">
+    <v-card>
+      <v-tabs
+        v-model="selectedTab"
+        centered
+        grow
+        @change="updateTabNotifications"
+      >
+        <v-tab v-for="tabType in tabs" :key="tabType">
+          <v-badge
+            inline
+            :color="tabColor(tabType)"
+            :content="tabNotificationCount(tabType)"
           >
-            {{ tag.name }}
-            <v-avatar right>{{ tag.count }}</v-avatar>
-          </v-chip>
-        </v-chip-group>
-      </template>
-      <template #[`item.releaseDate`]="{ item }">
-        {{
-          new Date(item.releaseDate).toLocaleDateString(locale, {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-            year: "numeric"
-          })
-        }}
-      </template>
-      <template #[`item.originalBody`]="{ item }">
-        {{ removeMarkdown(item.originalBody) }}
-      </template>
-    </v-data-table>
+            <v-icon>{{ tabIcon(tabType) }}</v-icon>
+            {{ $vuetify.lang.t(`$vuetify.notification.type.${tabType}`) }}
+          </v-badge>
+        </v-tab>
+      </v-tabs>
 
+      <v-data-table
+        v-model="selected"
+        item-key="id"
+        :headers="selectedTabHeaders"
+        :items="tabNotifications"
+        :search="searchQuery"
+        :custom-filter="customTableFilter"
+        :items-per-page="itemsPerPage"
+        :loading="loading || deleteInProgress"
+        height="calc(100vh - 300px)"
+        fixed-header
+        show-select
+        hide-default-footer
+        @click:row="notificationSelectHandle"
+      >
+        <template #top>
+          <v-text-field
+            v-model="searchQuery"
+            :label="$vuetify.lang.t('$vuetify.notification.search')"
+            :disabled="loading"
+            filled
+            clearable
+            hide-details
+          />
+        </template>
+        <template #[`item.type`]="{ item }">
+          <v-chip color="primary">
+            <v-icon>{{ iconForType(item.type) }}</v-icon>
+          </v-chip>
+        </template>
+        <template #[`item.tags`]="{ item }">
+          <v-chip-group column>
+            <v-chip
+              v-for="tag in item.tags"
+              :key="tag.name"
+              outlined
+              :color="stringToColor(tag.name)"
+              @click.stop="searchQuery = tag.name"
+            >
+              {{ tag.name }}
+              <v-avatar right>{{ tag.count }}</v-avatar>
+            </v-chip>
+          </v-chip-group>
+        </template>
+        <template #[`item.releaseDate`]="{ item }">
+          {{
+            new Date(item.releaseDate).toLocaleDateString(locale, {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+              year: "numeric"
+            })
+          }}
+        </template>
+        <template #[`item.originalBody`]="{ item }">
+          {{ removeMarkdown(item.originalBody) }}
+        </template>
+      </v-data-table>
+
+      <v-snackbar v-model="showError" color="red" transition="scale-transition">
+        {{ errorMessage }}
+        <v-btn text @click="showError = false">
+          {{ $vuetify.lang.t("$vuetify.close") }}
+        </v-btn>
+      </v-snackbar>
+      <song-notification-popup
+        :show-dialog="clicked != null"
+        :close-dialog="() => (clicked = null)"
+        :notification="clicked"
+        :delete-notification="deleteNotifications"
+      />
+    </v-card>
     <v-btn
-      block
+      width="80%"
+      class="ma-3"
       :disabled="selected.length === 0 || loading || deleteInProgress"
       color="red"
       @click="deleteNotifications(selected)"
@@ -86,25 +101,14 @@
       {{ $vuetify.lang.t("$vuetify.delete") }}
     </v-btn>
     <v-pagination
+      class="ma-3"
       :value="page"
       :length="numberOfPages()"
       :total-visible="7"
       :disabled="loading"
       @input="changePage"
     ></v-pagination>
-    <v-snackbar v-model="showError" color="red" transition="scale-transition">
-      {{ errorMessage }}
-      <v-btn text @click="showError = false">
-        {{ $vuetify.lang.t("$vuetify.close") }}
-      </v-btn>
-    </v-snackbar>
-    <song-notification-popup
-      :show-dialog="clicked != null"
-      :close-dialog="() => (clicked = null)"
-      :notification="clicked"
-      :delete-notification="deleteNotifications"
-    />
-  </v-card>
+  </div>
 </template>
 
 <script lang="ts">
@@ -132,7 +136,7 @@ import { Locale, settingsModule } from "@/plugins/store/settings-module";
 export default class extends Vue {
   private readonly settingsStore = settingsModule.context(this.$store);
 
-  private markdownUrlDescriptionPattern = new RegExp("\\[(.*)\\]\\((.*)\\)");
+  private markdownUrlDescriptionPattern = new RegExp("\\[(.*)\\]\\((.*?)\\)");
 
   private notifications: VocaDbNotification[] = [];
   private tabNotifications: VocaDbNotification[] = [];
