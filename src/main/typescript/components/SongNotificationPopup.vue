@@ -21,7 +21,11 @@
           <v-icon left>mdi-arrow-right</v-icon>
           To VocaDB
         </v-btn>
-        <v-btn type="primary" @click="deleteNotification([notification])">
+        <v-btn
+          color="error"
+          type="primary"
+          @click="deleteNotification([notification])"
+        >
           {{ $vuetify.lang.t("delete") }}
           <v-icon right>mdi-close</v-icon>
         </v-btn>

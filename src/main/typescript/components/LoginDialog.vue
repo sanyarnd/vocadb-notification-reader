@@ -32,9 +32,6 @@
     </v-select>
 
     <v-btn :disabled="!valid" :loading="loginInProgress" block @click="submit">
-      <v-avatar tile size="24px">
-        <v-img src="../assets/login-icon.webp" />
-      </v-avatar>
       {{
         $vuetify.lang.t("$vuetify.login.loginWith") +
         $vuetify.lang.t(
@@ -42,11 +39,16 @@
         )
       }}
     </v-btn>
-    <v-snackbar v-model="showError" color="red" transition="scale-transition">
+    <v-snackbar
+      v-model="showError"
+      color="error"
+      type="primary"
+      transition="scale-transition"
+    >
       {{ errorMessage }}
-      <v-btn text @click="showError = false">
-        {{ $vuetify.lang.t("$vuetify.close") }}
-      </v-btn>
+      <template #action="{ attrs }">
+        <v-btn text @click="showError = false">{{ $vuetify.lang.t("$vuetify.close") }}</v-btn>
+      </template>
     </v-snackbar>
   </v-form>
 </template>

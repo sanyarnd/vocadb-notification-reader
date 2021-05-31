@@ -78,12 +78,18 @@
         </template>
       </v-data-table>
 
-      <v-snackbar v-model="showError" color="red" transition="scale-transition">
+      <v-snackbar
+        v-model="showError"
+        color="error"
+        type="primary"
+        transition="scale-transition"
+      >
         {{ errorMessage }}
-        <v-btn text @click="showError = false">
-          {{ $vuetify.lang.t("$vuetify.close") }}
-        </v-btn>
+        <template #action="{ attrs }">
+          <v-btn text @click="showError = false">{{ $vuetify.lang.t("$vuetify.close") }}</v-btn>
+        </template>
       </v-snackbar>
+
       <song-notification-popup
         :show-dialog="clicked != null"
         :close-dialog="() => (clicked = null)"
@@ -95,7 +101,8 @@
       width="80%"
       class="ma-3"
       :disabled="selected.length === 0 || loading || deleteInProgress"
-      color="red"
+      color="error"
+      type="primary"
       @click="deleteNotifications(selected)"
     >
       {{ $vuetify.lang.t("$vuetify.delete") }}
