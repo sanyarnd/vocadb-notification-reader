@@ -47,7 +47,9 @@
     >
       {{ errorMessage }}
       <template #action="{ attrs }">
-        <v-btn text @click="showError = false">{{ $vuetify.lang.t("$vuetify.close") }}</v-btn>
+        <v-btn text @click="showError = false">{{
+          $vuetify.lang.t("$vuetify.close")
+        }}</v-btn>
       </template>
     </v-snackbar>
   </v-form>
