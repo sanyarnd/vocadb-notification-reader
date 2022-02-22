@@ -1,10 +1,4 @@
-### Project ##
-!**/src/main/**
-!**/src/test/**
-
-### Maven ###
-!.mvn/wrapper/maven-wrapper.jar
-/target/
+target/
 
 ### IntelliJ IDEA ###
 .idea/
@@ -19,17 +13,26 @@
 .factorypath
 .project
 
-### local env files ###
-.env.local
-.env.*.local
+### Yarn ###
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+### log files ###
+*.log
+hs_err_pid*
 
 ### Node ###
-/node/
+dist/
+node/
 node_tmp/
 node_modules/
 npm-debug.log.*
-/.awcache/*
-/.cache-loader/*
+.awcache/*
+.cache-loader/*
 
 ### log files ###
 npm-debug.log*
@@ -41,3 +44,6 @@ yarn-error.log*
 
 ### ESLint ###
 .eslintcache
+
+### Mac OS ###
+.DS_Store

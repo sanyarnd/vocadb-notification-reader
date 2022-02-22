@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use strum_macros::ToString;
+use strum_macros::AsRefStr;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ArtistParticipationStatus {
@@ -29,7 +29,7 @@ pub enum NameMatchMode {
     Words,
 }
 
-#[derive(Serialize, Deserialize, ToString, Debug)]
+#[derive(Serialize, Deserialize, AsRefStr, Debug)]
 pub enum LanguagePreference {
     Default,
     Japanese,
@@ -37,7 +37,7 @@ pub enum LanguagePreference {
     English,
 }
 
-#[derive(Serialize, Deserialize, ToString, Debug)]
+#[derive(Serialize, Deserialize, AsRefStr, Debug)]
 pub enum OptionalFields {
     None,
 

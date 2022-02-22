@@ -1,3 +1,3 @@
-pub mod auth;
-pub mod notifications;
 pub mod dto;
+pub mod errors;
+pub mod notifications;

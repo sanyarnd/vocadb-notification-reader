@@ -1,26 +1,42 @@
+use anyhow::Context;
 use std::cmp::Ordering;
 
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 use crate::client::client::Client;
 use crate::client::models::query::LanguagePreference;
 use crate::client::models::user::UserMessageContract;
-use crate::errors::AppError;
-use crate::service::auth::Database;
 use crate::service::dto::{
     Album, Artist, Event, Notification, Report, Song, SongNotificationType, Tag, Unknown, PV,
 };
+use crate::service::errors::Result;
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub enum Database {
+    VocaDb,
+    TouhouDb,
+    UtaiteDb,
+}
 
 pub async fn load_notification_details<'a>(
     client: &Client<'a>,
     database: &Database,
     language: &LanguagePreference,
     message_id: i32,
-) -> Result<Box<dyn Notification>, AppError> {
+) -> Result<Box<dyn Notification>> {
     let message = client.get_message(message_id).await?;
     let body = &message.body;
 
-    let re = Regex::new(&format!(r"https?://{}/(\w+)/(\d+)", database.domain()))?;
+    let re = Regex::new(&format!(
+        r"https?://{}/(\w+)/(\d+)",
+        match database {
+            Database::VocaDb => "vocadb.net",
+            Database::TouhouDb => "touhoudb.com",
+            Database::UtaiteDb => "utaitedb.net",
+        }
+    ))
+    .context("Unable to construct regular expression for URL parsing")?;
 
     let captures = re.captures(body);
 
@@ -32,13 +48,18 @@ pub async fn load_notification_details<'a>(
             } else {
                 captures.get(1).map(|t| t.as_str())
             };
-            let id = captures.get(2).map(|id| id.as_str());
 
             match notification_type {
                 None => unknown_notification(&message),
                 Some(n_type) => match n_type {
                     "S" => {
-                        let song_id = id.unwrap().parse::<i32>()?;
+                        let song_id = captures
+                            .get(2)
+                            .map(|id| id.as_str())
+                            .context("Unable to capture song ID")?
+                            .parse::<i32>()
+                            .context("Song ID has invalid format")?;
+
                         song_notification(client, song_id, &message, language).await?
                     }
                     "Ar" => artist_notification(&message),
@@ -93,7 +114,7 @@ async fn song_notification<'a>(
     song_id: i32,
     message: &UserMessageContract,
     language: &LanguagePreference,
-) -> Result<Box<Song>, AppError> {
+) -> Result<Box<Song>> {
     let song = client.get_song_by_id(song_id, language).await?;
     let song_notification_type = if message.subject.contains("tagged") {
         SongNotificationType::Tagged
@@ -121,12 +142,10 @@ async fn song_notification<'a>(
     });
 
     let mut pvs: Vec<PV> = song.pvs.iter().map(PV::from).collect();
-    pvs.sort_by(
-        |a, b| match a.service.to_string().cmp(&b.service.to_string()) {
-            Ordering::Equal => a.pv_type.to_string().cmp(&b.pv_type.to_string()),
-            other => other,
-        },
-    );
+    pvs.sort_by(|a, b| match a.service.as_ref().cmp(&b.service.as_ref()) {
+        Ordering::Equal => a.pv_type.as_ref().cmp(&b.pv_type.as_ref()),
+        other => other,
+    });
 
     Ok(Box::new(Song {
         id: message.id,

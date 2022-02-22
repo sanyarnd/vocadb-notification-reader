@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize, Deserializer};
-use strum_macros::ToString;
+use serde::{Deserialize, Deserializer, Serialize};
+use strum_macros::AsRefStr;
 
 use crate::client::models::entrythumb::EntryThumbForApiContract;
 use crate::client::models::misc::OldUsernameContract;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, TimeZone, Utc};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum GroupId {
@@ -15,7 +15,7 @@ pub enum GroupId {
     Admin,
 }
 
-#[derive(Serialize, Deserialize, ToString, Debug)]
+#[derive(Serialize, Deserialize, AsRefStr, Debug)]
 pub enum Inbox {
     Nothing,
     Received,
@@ -63,7 +63,10 @@ pub struct UserMessageContract {
     pub id: i32,
     pub subject: String,
     pub body: String,
-    #[serde(rename = "createdFormatted", deserialize_with = "formatted_string_to_date")]
+    #[serde(
+        rename = "createdFormatted",
+        deserialize_with = "formatted_string_to_date"
+    )]
     pub created_formatted: DateTime<Utc>,
     #[serde(rename = "highPriority")]
     pub high_priority: bool,
@@ -74,14 +77,16 @@ pub struct UserMessageContract {
 }
 
 fn formatted_string_to_date<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
-    where
-        D: Deserializer<'de>,
+where
+    D: Deserializer<'de>,
 {
     // 11.02.2018 11:19
     const FORMAT: &'static str = "%d.%m.%Y %H:%M";
 
     let date_str = String::deserialize(deserializer)?;
-    Utc.datetime_from_str(&date_str, FORMAT).map_err(serde::de::Error::custom)}
+    Utc.datetime_from_str(&date_str, FORMAT)
+        .map_err(serde::de::Error::custom)
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserWithEmailContract {

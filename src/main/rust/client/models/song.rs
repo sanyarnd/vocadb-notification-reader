@@ -1,6 +1,6 @@
 use serde::de::IntoDeserializer;
 use serde::{Deserialize, Deserializer, Serialize};
-use strum_macros::ToString;
+use strum_macros::AsRefStr;
 
 use crate::client::models::entrythumb::{EntryThumbContract, EntryThumbForApiContract};
 use crate::client::models::pv::PVContract;
@@ -18,7 +18,7 @@ pub enum FeaturedCategory {
     Other,
 }
 
-#[derive(Serialize, Deserialize, ToString, Debug)]
+#[derive(Serialize, Deserialize, AsRefStr, Debug)]
 pub enum PvServices {
     Nothing,
     NicoNicoDouga,

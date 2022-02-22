@@ -1,10 +1,15 @@
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::error::{InternalError, JsonPayloadError};
+use actix_web::middleware::Logger;
+use actix_web::{Error, HttpRequest, HttpResponse};
 use actix_web_httpauth::middleware::HttpAuthentication;
+use awc::http::StatusCode;
+
+use crate::web::controller;
+use crate::web::errors::{collect_stacktrace, ErrorResponse};
 
 mod client;
-mod controller;
-mod errors;
 mod service;
+mod web;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -13,28 +18,34 @@ async fn main() -> std::io::Result<()> {
     }
     env_logger::init();
 
-    HttpServer::new(|| {
-        App::new()
-            .wrap(middleware::Logger::default())
-            .route("/api/login", web::post().to(controller::login))
+    actix_web::HttpServer::new(|| {
+        actix_web::App::new()
+            .app_data(actix_web::web::JsonConfig::default().error_handler(json_error_handler))
+            .wrap(Logger::default())
+            .service(controller::login)
             .service(
-                web::scope("/api")
-                    .wrap(HttpAuthentication::bearer(service::auth::validate_token))
-                    .route(
-                        "/notifications/fetch",
-                        web::post().to(controller::get_notifications),
-                    )
-                    .route(
-                        "/notifications/delete",
-                        web::post().to(controller::delete_notifications),
-                    )
-                    .route(
-                        "/users/current",
-                        web::post().to(controller::get_current_user),
-                    ),
+                actix_web::web::scope("/api")
+                    .wrap(HttpAuthentication::bearer(
+                        web::middleware::auth_token::validate,
+                    ))
+                    .service(controller::get_notifications)
+                    .service(controller::delete_notifications)
+                    .service(controller::get_current_user),
             )
     })
     .bind("127.0.0.1:8080")?
     .run()
     .await
+}
+
+pub fn json_error_handler(err: JsonPayloadError, _req: &HttpRequest) -> Error {
+    let stacktrace = collect_stacktrace(&err);
+    let message = err.to_string();
+    let code = StatusCode::BAD_REQUEST.as_u16();
+    let response = HttpResponse::BadRequest().json(&ErrorResponse {
+        code,
+        message,
+        stacktrace,
+    });
+    InternalError::from_response(err, response).into()
 }
