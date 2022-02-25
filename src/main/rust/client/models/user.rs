@@ -4,6 +4,7 @@ use strum_macros::AsRefStr;
 use crate::client::models::entrythumb::EntryThumbForApiContract;
 use crate::client::models::misc::OldUsernameContract;
 use chrono::{DateTime, TimeZone, Utc};
+use log::debug;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum GroupId {
@@ -64,8 +65,8 @@ pub struct UserMessageContract {
     pub subject: String,
     pub body: String,
     #[serde(
-        rename = "createdFormatted",
-        deserialize_with = "formatted_string_to_date"
+    rename = "createdFormatted",
+    deserialize_with = "formatted_string_to_date"
     )]
     pub created_formatted: DateTime<Utc>,
     #[serde(rename = "highPriority")]
@@ -77,15 +78,23 @@ pub struct UserMessageContract {
 }
 
 fn formatted_string_to_date<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
-where
-    D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
 {
     // 11.02.2018 11:19
-    const FORMAT: &'static str = "%d.%m.%Y %H:%M";
+    const FORMAT_1: &'static str = "%d.%m.%Y %H:%M";
+    // 2/25/2022 2:29 PM
+    const FORMAT_2: &'static str = "%m/%d/%Y %I:%M %p";
 
     let date_str = String::deserialize(deserializer)?;
-    Utc.datetime_from_str(&date_str, FORMAT)
-        .map_err(serde::de::Error::custom)
+    match Utc.datetime_from_str(&date_str, FORMAT_1) {
+        Ok(date) => Ok(date),
+        Err(_) => {
+            debug!("Failed to convert time, falling back to the second format");
+            Utc.datetime_from_str(&date_str, FORMAT_2)
+                .map_err(|e| serde::de::Error::custom(format!("Unknown date format ({}) {}", e, date_str)))
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
