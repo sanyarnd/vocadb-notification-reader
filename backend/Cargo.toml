@@ -6,7 +6,7 @@ edition = "2021"
 
 [[bin]]
 name = "vocadb-notification-reader"
-path = "src/main/rust/main.rs"
+path = "src/main.rs"
 
 [dependencies]
 thiserror = "1.0"
