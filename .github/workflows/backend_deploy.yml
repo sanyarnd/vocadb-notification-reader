@@ -11,19 +11,19 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
     name: Deploy
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
-      - uses: redhat-actions/buildah-build@v2
+      - uses: redhat-actions/podman-login@v1
         with:
-          base-image: docker.io/debian:10-slim
-          image: vocadb-notification-reader
-          tags: ${{ github.sha }}
-          content: |
-            target/release/vocadb-notification-reader
-          entrypoint: vocadb-notification-reader
-          port: 8080
+          registry: ghcr.io/${{ github.actor }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: podman save --quiet -o alpine.tar vocadb-notification-reader:${{ github.sha }}
+      - run: podman build ghcr.io/${{ github.repository }} -t ${{ github.sha }}
+      - run: podman push ghcr.io/${{ github.repository }}:${{ github.sha }}

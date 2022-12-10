@@ -11,8 +11,11 @@ env:
 
 jobs:
   build:
-    name: Build
     runs-on: ubuntu-latest
+    name: Build
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
       - uses: actions/checkout@v3
@@ -31,6 +34,4 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - run: cargo build --release --all-features
-        working-directory: backend
       - run: cargo clippy --all-targets --all-features
-        working-directory: backend
