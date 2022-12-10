@@ -151,6 +151,7 @@ pub enum ArtistRoles {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ArtistType {
     Unknown,
     Circle,

@@ -142,16 +142,13 @@ impl From<&PVContract> for PV {
                     None => None,
                     Some(timestamp) => {
                         let option = timestamp.as_str();
-                        match option {
-                            None => None,
-                            Some(option) => Some(String::from(option)),
-                        }
+                        option.map(String::from)
                     }
                 }
             }
         }
 
-        return PV {
+        PV {
             id: pv.id,
             pv_type: pv.pv_type,
             service: pv.service,
@@ -163,6 +160,6 @@ impl From<&PVContract> for PV {
             pv_id: pv.pv_id.clone(),
             thumb_url: pv.thumb_url.clone(),
             timestamp,
-        };
+        }
     }
 }

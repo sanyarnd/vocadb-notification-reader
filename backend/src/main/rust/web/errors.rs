@@ -13,7 +13,7 @@ pub type Result<T, E = AppResponseError> = core::result::Result<T, E>;
 #[derive(thiserror::Error, Debug)]
 pub enum AppResponseError {
     #[error("{0}")]
-    ConstraintViolationError(String),
+    ConstraintViolation(String),
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
     #[error(transparent)]
@@ -38,28 +38,28 @@ impl actix_web::ResponseError for AppResponseError {
             }
         }
 
-        return match self {
-            AppResponseError::ConstraintViolationError(_) => StatusCode::BAD_REQUEST,
+        match self {
+            AppResponseError::ConstraintViolation(_) => StatusCode::BAD_REQUEST,
             AppResponseError::VocadbClientError(e) => vocadb_client_error(e),
             AppResponseError::NotificationError(e) => match e {
                 NotificationError::VocadbClientError(e) => vocadb_client_error(e),
                 NotificationError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
             AppResponseError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
+        }
     }
 
     fn error_response(&self) -> HttpResponse<BoxBody> {
         let message = match self {
-            AppResponseError::ConstraintViolationError(e) => {
-                format!("Constraint violation: {}", e.to_string())
+            AppResponseError::ConstraintViolation(e) => {
+                format!("Constraint violation: {}", e)
             }
-            AppResponseError::UnexpectedError(e) => format!("Unexpected error: {}", e.to_string()),
+            AppResponseError::UnexpectedError(e) => format!("Unexpected error: {}", e),
             AppResponseError::VocadbClientError(e) => {
-                format!("Web client error: {}", e.to_string())
+                format!("Web client error: {}", e)
             }
             AppResponseError::NotificationError(e) => {
-                format!("Error while processing notifications: {}", e.to_string())
+                format!("Error while processing notifications: {}", e)
             }
         };
         let stacktrace = collect_stacktrace(self);

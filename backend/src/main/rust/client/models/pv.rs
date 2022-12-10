@@ -41,10 +41,11 @@ where
 {
     let str = String::deserialize(deserializer)?;
     let json_map = serde_json::from_str(&str);
-    return match json_map {
+
+    match json_map {
         Ok(map) => Ok(map),
         Err(_) => Err(serde::de::Error::custom("Unable to parse raw JSON map")),
-    };
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -71,7 +72,7 @@ pub struct PVForSongContract {
     url: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, AsRefStr, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, AsRefStr, Debug)]
 pub enum PvService {
     NicoNicoDouga,
     Youtube,
