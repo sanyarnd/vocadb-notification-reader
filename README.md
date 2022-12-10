@@ -1,6 +1,6 @@
 # VocaDB Notification Reader
-![Backend](https://github.com/sanyarnd/vocadb-notification-reader/actions/workflows/backend.yml/badge.svg)
-![Frontend](https://github.com/sanyarnd/vocadb-notification-reader/actions/workflows/frontend.yml/badge.svg)
+[![Backend Build](https://github.com/sanyarnd/vocadb-notification-reader/actions/workflows/backend.yml/badge.svg)](https://github.com/sanyarnd/vocadb-notification-reader/actions/workflows/backend.yml)
+[![Frontend Build](https://github.com/sanyarnd/vocadb-notification-reader/actions/workflows/frontend.yml/badge.svg)](https://github.com/sanyarnd/vocadb-notification-reader/actions/workflows/frontend.yml)
 
 Unofficial notification reader for:
 * https://vocadb.net
