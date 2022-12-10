@@ -28,4 +28,4 @@ jobs:
         if: github.ref_name == 'master'
         with:
           branch: gh-pages
-          folder: dist
+          folder: frontend/dist
