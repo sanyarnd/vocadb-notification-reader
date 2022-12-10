@@ -11,9 +11,10 @@ use crate::service::errors::NotificationError;
 pub type Result<T, E = AppResponseError> = core::result::Result<T, E>;
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum AppResponseError {
     #[error("{0}")]
-    ConstraintViolation(String),
+    ConstraintViolationError(String),
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
     #[error(transparent)]
@@ -39,7 +40,7 @@ impl actix_web::ResponseError for AppResponseError {
         }
 
         match self {
-            AppResponseError::ConstraintViolation(_) => StatusCode::BAD_REQUEST,
+            AppResponseError::ConstraintViolationError(_) => StatusCode::BAD_REQUEST,
             AppResponseError::VocadbClientError(e) => vocadb_client_error(e),
             AppResponseError::NotificationError(e) => match e {
                 NotificationError::VocadbClientError(e) => vocadb_client_error(e),
@@ -51,7 +52,7 @@ impl actix_web::ResponseError for AppResponseError {
 
     fn error_response(&self) -> HttpResponse<BoxBody> {
         let message = match self {
-            AppResponseError::ConstraintViolation(e) => {
+            AppResponseError::ConstraintViolationError(e) => {
                 format!("Constraint violation: {}", e)
             }
             AppResponseError::UnexpectedError(e) => format!("Unexpected error: {}", e),

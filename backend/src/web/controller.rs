@@ -42,7 +42,7 @@ pub async fn get_notifications(
     payload: Json<NotificationsFetchRequest>,
 ) -> Result<impl Responder, AppResponseError> {
     if payload.start_offset < 0 || payload.max_results < 0 || payload.max_results > 100 {
-        return Err(AppResponseError::ConstraintViolation(
+        return Err(AppResponseError::ConstraintViolationError(
             "Invalid parameters".to_string(),
         ));
     }
