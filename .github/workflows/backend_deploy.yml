@@ -3,7 +3,7 @@ name: Backend Deploy
 on:
   workflow_run:
     workflows: [ Backend Build ]
-    branches: [ master ]
+#    branches: [ master ]
     types: [ completed ]
 
 jobs:
@@ -13,4 +13,14 @@ jobs:
     name: Deploy
 
     steps:
-      - run: echo 'test'
+      - uses: redhat-actions/buildah-build@v2
+        with:
+          base-image: docker.io/debian:10-slim
+          image: vocadb-notification-reader
+          tags: ${{ github.sha }}
+          content: |
+            target/release/vocadb-notification-reader
+          entrypoint: vocadb-notification-reader
+          port: 8080
+
+      - run: podman save --quiet -o alpine.tar vocadb-notification-reader:${{ github.sha }}
