@@ -1,8 +1,9 @@
-name: Frontend
+name: Frontend Build
 
 on:
   push:
-    branches: [ master ]
+    paths:
+      - frontend/**
 
 jobs:
   build:
@@ -16,4 +17,6 @@ jobs:
           node-version: 16.x
 
       - run: yarn --frozen-lockfile
+        working-directory: frontend
       - run: yarn run build:prod
+        working-directory: frontend

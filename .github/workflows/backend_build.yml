@@ -1,8 +1,9 @@
-name: backend
+name: Backend Build
 
 on:
   push:
-    branches: [ master ]
+    paths:
+      - backend/**
 
 jobs:
   build:
@@ -16,3 +17,4 @@ jobs:
           toolchain: stable
 
       - run: cargo build --release --all-features
+        working-directory: backend
