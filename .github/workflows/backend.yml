@@ -38,3 +38,9 @@ jobs:
         if: github.ref_name == 'master'
       - run: podman push ghcr.io/${{ github.repository }}:${{ github.sha }}
         if: github.ref_name == 'master'
+
+      - uses: actions/delete-package-versions@v3
+        if: github.ref_name == 'master'
+        with:
+          package-name: ${{ github.event.repository.name }}
+          min-versions-to-keep: 3

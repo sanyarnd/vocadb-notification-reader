@@ -1,4 +1,4 @@
-FROM debian:10-slim
+FROM ubuntu:22.04
 WORKDIR /app
 
 COPY /target/release/vocadb-notification-reader .
