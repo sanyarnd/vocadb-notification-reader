@@ -3,4 +3,4 @@ WORKDIR /app
 
 COPY /target/release/vocadb-notification-reader .
 
-ENTRYPOINT ["vocadb-notification-reader"]
+ENTRYPOINT ["/app/vocadb-notification-reader"]
