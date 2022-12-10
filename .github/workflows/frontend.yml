@@ -19,7 +19,14 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 16
 
       - run: yarn --frozen-lockfile
       - run: yarn run build:prod
+
+      - uses: cloudflare/wrangler-action@2
+        if: github.ref_name == 'master'
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+#          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages publish --project-name=vocadb-notification-reader
