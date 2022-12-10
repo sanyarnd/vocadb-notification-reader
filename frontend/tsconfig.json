@@ -12,7 +12,6 @@
     "types": ["webpack-env"],
 
     "baseUrl": "./",
-    "outDir": "target/classes/static/assets",
     "paths": {
       "@/*": ["src/main/typescript/*"]
     },

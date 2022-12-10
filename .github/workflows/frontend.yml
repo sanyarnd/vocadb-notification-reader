@@ -24,9 +24,8 @@ jobs:
       - run: yarn --frozen-lockfile
       - run: yarn run build:prod
 
-      - uses: cloudflare/wrangler-action@2
+      - uses: JamesIves/github-pages-deploy-action@v4
         if: github.ref_name == 'master'
         with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-#          accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          command: pages publish --project-name=vocadb-notification-reader
+          branch: gh-pages
+          folder: dist

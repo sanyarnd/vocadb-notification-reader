@@ -21,7 +21,6 @@ module.exports = {
     }
   },
 
-  outputDir: "target/spa",
   lintOnSave: false,
 
   css: {
