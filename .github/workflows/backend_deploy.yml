@@ -2,7 +2,7 @@ name: Backend Deploy
 
 on:
   workflow_run:
-    workflows: [ Backend Build ]
+    workflows: [ "Backend Build" ]
 #    branches: [ master ]
     types: [ completed ]
 
