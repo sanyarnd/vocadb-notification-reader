@@ -11,6 +11,7 @@ use crate::service::errors::NotificationError;
 pub type Result<T, E = AppResponseError> = core::result::Result<T, E>;
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum AppResponseError {
     #[error("{0}")]
     ConstraintViolationError(String),
@@ -38,7 +39,7 @@ impl actix_web::ResponseError for AppResponseError {
             }
         }
 
-        return match self {
+        match self {
             AppResponseError::ConstraintViolationError(_) => StatusCode::BAD_REQUEST,
             AppResponseError::VocadbClientError(e) => vocadb_client_error(e),
             AppResponseError::NotificationError(e) => match e {
@@ -46,20 +47,20 @@ impl actix_web::ResponseError for AppResponseError {
                 NotificationError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
             AppResponseError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
+        }
     }
 
     fn error_response(&self) -> HttpResponse<BoxBody> {
         let message = match self {
             AppResponseError::ConstraintViolationError(e) => {
-                format!("Constraint violation: {}", e.to_string())
+                format!("Constraint violation: {}", e)
             }
-            AppResponseError::UnexpectedError(e) => format!("Unexpected error: {}", e.to_string()),
+            AppResponseError::UnexpectedError(e) => format!("Unexpected error: {}", e),
             AppResponseError::VocadbClientError(e) => {
-                format!("Web client error: {}", e.to_string())
+                format!("Web client error: {}", e)
             }
             AppResponseError::NotificationError(e) => {
-                format!("Error while processing notifications: {}", e.to_string())
+                format!("Error while processing notifications: {}", e)
             }
         };
         let stacktrace = collect_stacktrace(self);

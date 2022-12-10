@@ -75,6 +75,7 @@ pub enum TopSongsFilterRule {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum TopSongsVocalist {
     Nothing,
     Vocaloid,

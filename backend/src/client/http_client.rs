@@ -21,20 +21,19 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
-    pub fn vocadb(cookies: &Vec<String>) -> Result<Client<'a>> {
-        return Client::new("https://vocadb.net", cookies);
+    pub fn vocadb(cookies: &'a [String]) -> Result<Client<'a>> {
+        Client::new("https://vocadb.net", cookies)
     }
 
-    pub fn touhoudb(cookies: &Vec<String>) -> Result<Client<'a>> {
-        return Client::new("https://touhoudb.com", cookies);
+    pub fn touhoudb(cookies: &'a [String]) -> Result<Client<'a>> {
+        Client::new("https://touhoudb.com", cookies)
     }
 
-    pub fn utaitedb(cookies: &Vec<String>) -> Result<Client<'a>> {
-        return Client::new("https://utaitedb.net", cookies);
+    pub fn utaitedb(cookies: &'a [String]) -> Result<Client<'a>> {
+        Client::new("https://utaitedb.net", cookies)
     }
 
-    fn new(base_url: &'a str, cookies: &Vec<String>) -> Result<Client<'a>> {
-        let cookies = cookies.clone();
+    fn new(base_url: &'a str, cookies: &'a [String]) -> Result<Client<'a>> {
         let mut parsed_cookies = vec![];
         for c in cookies {
             let cookie = Cookie::parse(c).context("Unable to parse a cookie")?;
@@ -47,24 +46,26 @@ impl<'a> Client<'a> {
             .max_redirects(0)
             .finish();
 
-        return Ok(Client {
+        Ok(Client {
             client: awc_client,
             base_url,
             cookies: parsed_cookies,
-        });
+        })
     }
 
     fn add_cookie(&mut self, cookie: &Cookie<'a>) -> &Client {
         self.cookies.push(cookie.clone());
-        return self;
+
+        self
     }
 
     fn clear_cookie(&mut self) -> &Client {
         self.cookies.clear();
-        return self;
+
+        self
     }
 
-    fn create_request(&self, url: &String, method: actix_web::http::Method) -> awc::ClientRequest {
+    fn create_request(&self, url: &String, method: Method) -> awc::ClientRequest {
         let mut builder = match method {
             Method::GET => self.client.get(url),
             Method::POST => self.client.post(url),
@@ -75,7 +76,8 @@ impl<'a> Client<'a> {
         for cookie in &self.cookies {
             builder = builder.cookie(cookie.clone());
         }
-        return builder;
+
+        builder
     }
 
     async fn http_get<T, R>(&self, url: &String, query: &T) -> Result<R>
@@ -94,7 +96,8 @@ impl<'a> Client<'a> {
             .await?;
         debug!("Response: {}", String::from_utf8(body.to_vec()).unwrap());
         let json = serde_json::from_slice(&body).context("Unable to deserialize a payload")?;
-        return Ok(json);
+
+         Ok(json)
     }
 
     async fn http_delete_void<T>(&self, url: &String, query: &T) -> Result<()>
@@ -107,7 +110,8 @@ impl<'a> Client<'a> {
             .context("Unable to construct a query")?
             .send()
             .await?;
-        return Ok(());
+
+        Ok(())
     }
 
     pub async fn login(&mut self, username: &str, password: &str) -> Result<()> {
@@ -137,23 +141,23 @@ impl<'a> Client<'a> {
 
         let cookies = response.cookies().context("Unable to parse a cookie")?;
         let auth_cookie = cookies.iter().find(|c| c.name() == ".AspNetCore.Cookies");
-        return match auth_cookie {
+
+        match auth_cookie {
             None => Err(VocadbClientError::BadCredentialsError),
             Some(cookie) => {
                 self.clear_cookie();
                 self.add_cookie(cookie);
                 Ok(())
             }
-        };
+        }
     }
 
     pub async fn current_user(&self) -> Result<UserForApiContract> {
-        return self
-            .http_get(
-                &format!("{}/api/users/current", self.base_url),
-                &vec![("fields", OptionalFields::MainPicture.as_ref().to_string())],
-            )
-            .await;
+        self.http_get(
+            &format!("{}/api/users/current", self.base_url),
+            &vec![("fields", OptionalFields::MainPicture.as_ref().to_string())],
+        )
+        .await
     }
 
     pub async fn get_messages(
@@ -170,12 +174,12 @@ impl<'a> Client<'a> {
             ("maxResults", max_results.to_string()),
             ("getTotalCount", true.to_string()),
         ];
-        return self
-            .http_get(
-                &format!("{}/api/users/{}/messages", self.base_url, user_id),
-                &query,
-            )
-            .await;
+
+        self.http_get(
+            &format!("{}/api/users/{}/messages", self.base_url, user_id),
+            &query,
+        )
+        .await
     }
 
     pub async fn get_message(&self, message_id: i32) -> Result<UserMessageContract> {
@@ -183,22 +187,21 @@ impl<'a> Client<'a> {
 
         let url: String = format!("{}/api/users/messages/{}", self.base_url, message_id);
         let query: Vec<(&str, &str)> = vec![];
-        return self.http_get(&url, &query).await;
+        self.http_get(&url, &query).await
     }
 
-    pub async fn delete_messages(&self, user_id: i32, message_ids: &Vec<i32>) -> Result<()> {
+    pub async fn delete_messages(&self, user_id: i32, message_ids: &[i32]) -> Result<()> {
         debug!("Delete messages by IDs: {:?}", message_ids);
 
         let query: Vec<(&str, String)> = message_ids
             .iter()
             .map(|id| ("messageId", id.to_string()))
             .collect();
-        return self
-            .http_delete_void(
-                &format!("{}/api/users/{}/messages", self.base_url, user_id),
-                &query,
-            )
-            .await;
+        self.http_delete_void(
+            &format!("{}/api/users/{}/messages", self.base_url, user_id),
+            &query,
+        )
+        .await
     }
 
     pub async fn get_song_by_id(
@@ -219,14 +222,13 @@ impl<'a> Client<'a> {
         ]
         .join(",");
 
-        return self
-            .http_get(
-                &format!("{}/api/songs/{}", self.base_url, song_id),
-                &vec![
-                    ("fields", default_fields.as_str()),
-                    ("lang", language.as_ref()),
-                ],
-            )
-            .await;
+        self.http_get(
+            &format!("{}/api/songs/{}", self.base_url, song_id),
+            &vec![
+                ("fields", default_fields.as_str()),
+                ("lang", language.as_ref()),
+            ],
+        )
+        .await
     }
 }

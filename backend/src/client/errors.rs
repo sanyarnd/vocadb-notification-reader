@@ -1,6 +1,7 @@
 pub type Result<T, E = VocadbClientError> = core::result::Result<T, E>;
 
 #[derive(thiserror::Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum VocadbClientError {
     #[error("Provided credentials are not valid")]
     BadCredentialsError,

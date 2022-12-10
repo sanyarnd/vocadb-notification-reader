@@ -82,9 +82,9 @@ fn formatted_string_to_date<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D:
         D: Deserializer<'de>,
 {
     // 11.02.2018 11:19
-    const FORMAT_1: &'static str = "%d.%m.%Y %H:%M";
+    const FORMAT_1: &str = "%d.%m.%Y %H:%M";
     // 2/25/2022 2:29 PM
-    const FORMAT_2: &'static str = "%m/%d/%Y %I:%M %p";
+    const FORMAT_2: &str = "%m/%d/%Y %I:%M %p";
 
     let date_str = String::deserialize(deserializer)?;
     match Utc.datetime_from_str(&date_str, FORMAT_1) {

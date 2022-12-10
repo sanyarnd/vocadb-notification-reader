@@ -1,10 +1,10 @@
-use anyhow::Context;
 use std::cmp::Ordering;
 
+use anyhow::Context;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::client::client::Client;
+use crate::client::http_client::Client;
 use crate::client::models::query::LanguagePreference;
 use crate::client::models::user::UserMessageContract;
 use crate::service::dto::{
@@ -13,6 +13,7 @@ use crate::service::dto::{
 use crate::service::errors::Result;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum Database {
     VocaDb,
     TouhouDb,
@@ -78,7 +79,7 @@ fn report_notification(message: &UserMessageContract) -> Box<Report> {
         id: message.id,
         original_subject: message.subject.clone(),
         original_body: message.body.clone(),
-        created_date: message.created_formatted.clone(),
+        created_date: message.created_formatted,
     })
 }
 
@@ -87,7 +88,7 @@ fn album_notification(message: &UserMessageContract) -> Box<Album> {
         id: message.id,
         original_subject: message.subject.clone(),
         original_body: message.body.clone(),
-        created_date: message.created_formatted.clone(),
+        created_date: message.created_formatted,
     })
 }
 
@@ -96,7 +97,7 @@ fn event_notification(message: &UserMessageContract) -> Box<Event> {
         id: message.id,
         original_subject: message.subject.clone(),
         original_body: message.body.clone(),
-        created_date: message.created_formatted.clone(),
+        created_date: message.created_formatted,
     })
 }
 
@@ -105,7 +106,7 @@ fn artist_notification(message: &UserMessageContract) -> Box<Artist> {
         id: message.id,
         original_subject: message.subject.clone(),
         original_body: message.body.clone(),
-        created_date: message.created_formatted.clone(),
+        created_date: message.created_formatted,
     })
 }
 
@@ -142,8 +143,8 @@ async fn song_notification<'a>(
     });
 
     let mut pvs: Vec<PV> = song.pvs.iter().map(PV::from).collect();
-    pvs.sort_by(|a, b| match a.service.as_ref().cmp(&b.service.as_ref()) {
-        Ordering::Equal => a.pv_type.as_ref().cmp(&b.pv_type.as_ref()),
+    pvs.sort_by(|a, b| match a.service.as_ref().cmp(b.service.as_ref()) {
+        Ordering::Equal => a.pv_type.as_ref().cmp(b.pv_type.as_ref()),
         other => other,
     });
 
@@ -151,7 +152,7 @@ async fn song_notification<'a>(
         id: message.id,
         original_subject: message.subject.clone(),
         original_body: message.body.clone(),
-        created_date: message.created_formatted.clone(),
+        created_date: message.created_formatted,
         song_notification_type,
         song_id,
         song_type,
@@ -164,10 +165,10 @@ async fn song_notification<'a>(
 }
 
 fn unknown_notification(message: &UserMessageContract) -> Box<dyn Notification> {
-    return Box::new(Unknown {
+    Box::new(Unknown {
         id: message.id,
         original_subject: message.subject.clone(),
         original_body: message.body.clone(),
-        created_date: message.created_formatted.clone(),
-    });
+        created_date: message.created_formatted,
+    })
 }

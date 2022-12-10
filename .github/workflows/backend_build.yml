@@ -1,0 +1,36 @@
+name: Backend Build
+
+on:
+  push:
+    paths:
+      - backend/**
+      - .github/workflows/backend_*
+
+env:
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - run: cargo build --release --all-features
+        working-directory: backend
+      - run: cargo clippy --all-targets --all-features
+        working-directory: backend
