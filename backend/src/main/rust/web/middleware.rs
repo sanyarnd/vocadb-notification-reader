@@ -51,9 +51,11 @@ pub mod auth_token {
     pub async fn validate(
         req: ServiceRequest,
         credentials: BearerAuth,
-    ) -> actix_web::Result<ServiceRequest> {
+    ) -> actix_web::Result<ServiceRequest, (actix_web::Error, ServiceRequest)>  {
         let token = credentials.token();
-        parse(token)?;
+        if let Err(err) = parse(token) {
+            return Err((err.into(), req))
+        }
 
         Ok(req)
     }
