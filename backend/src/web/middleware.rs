@@ -45,7 +45,7 @@ pub mod auth_token {
         let aes_cipher: Aes = Aes::new_from_slices(&KEY, &IV).unwrap();
         let data = aes_cipher.encrypt_vec(&token);
 
-        Ok(base64::encode(&data))
+        Ok(base64::encode(data))
     }
 
     pub async fn validate(
