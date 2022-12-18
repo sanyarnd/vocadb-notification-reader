@@ -50,6 +50,7 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: dist
+          path: dist
 
       - run: |
           ssh $REMOTE "mkdir -p deploy/nginx/html/vocadb-notification-reader"
