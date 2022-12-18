@@ -27,7 +27,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: dist
-          path: dist/
+          path: frontend/dist
 
   deploy:
     runs-on: ubuntu-latest
@@ -50,4 +50,4 @@ jobs:
 
       - run: |
           ssh $REMOTE "mkdir -p deploy/nginx/html/vocadb-notification-reader"
-          rsync --recursive --ignore-existing --delete dist/ $REMOTE:~/deploy/nginx/html/vocadb-notification-reader
+          rsync --recursive --ignore-existing --delete frontend/dist/ $REMOTE:~/deploy/nginx/html/vocadb-notification-reader
