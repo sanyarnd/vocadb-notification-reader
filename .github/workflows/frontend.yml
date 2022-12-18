@@ -24,8 +24,30 @@ jobs:
       - run: yarn --frozen-lockfile
       - run: yarn run build:prod
 
-      - uses: JamesIves/github-pages-deploy-action@v4
-        if: github.ref_name == 'master'
+      - uses: actions/upload-artifact@v3
         with:
-          branch: gh-pages
-          folder: frontend/dist
+          name: dist
+          path: dist
+
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    needs: [ build ]
+    if: github.ref_name == 'master'
+
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir .ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_SSH_CONFIG }}" > ~/.ssh/config
+          echo "${{ secrets.DEPLOY_SSH_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 700 ~/.ssh && chmod 600 deploy_key
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: dist
+
+      - run: |
+          ssh $REMOTE "mkdir -p deploy/nginx/html/vocadb-notification-reader"
+          rsync --recursive --ignore-existing --delete dist/ $REMOTE:~/deploy/nginx/html/vocadb-notification-reader

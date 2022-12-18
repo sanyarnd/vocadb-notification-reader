@@ -51,6 +51,25 @@ jobs:
           package-name: ${{ github.event.repository.name }}
           min-versions-to-keep: 3
 
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    needs: [ build ]
+    if: github.ref_name == 'master'
+
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir .ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_SSH_CONFIG }}" > ~/.ssh/config
+          echo "${{ secrets.DEPLOY_SSH_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 700 ~/.ssh && chmod 600 deploy_key
+
+      - run: |
+          ssh $REMOTE "docker pull ghcr.io/${{ github.repository }}:latest"
+          ssh $REMOTE "docker restart vocadb-notification-reader"
+
 #  test:
 #    name: Test Suite
 #    runs-on: ubuntu-latest
