@@ -5,7 +5,11 @@ import { store } from "@/plugins/store";
 import { accountModule } from "@/plugins/store/account-module";
 
 export const axios = originalAxios.create({
-  timeout: 45 * 1000 // 45s
+  timeout: 45 * 1000,
+  baseURL:
+    process.env.NODE_ENV !== "production"
+      ? "http://localhost:8080"
+      : "https://api.vocadb-notification-reader.handystuff.net"
 });
 
 axios.interceptors.request.use(
