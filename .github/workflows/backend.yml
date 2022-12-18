@@ -51,19 +51,27 @@ jobs:
           package-name: ${{ github.event.repository.name }}
           min-versions-to-keep: 3
 
-  #  test:
-  #    name: Test Suite
-  #    runs-on: ubuntu-latest
-  #    steps:
-  #      - uses: actions/checkout@v3
-  #      - uses: actions-rs/toolchain@v1
-  #        with:
-  #          toolchain: stable
-  #      - run: cargo test
+#  test:
+#    name: Test Suite
+#    runs-on: ubuntu-latest
+#    defaults:
+#      run:
+#        working-directory: backend
+#
+#    steps:
+#      - uses: actions/checkout@v3
+#      - uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: stable
+#      - run: cargo test
 
   check:
     name: Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -74,6 +82,10 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -84,6 +96,10 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
