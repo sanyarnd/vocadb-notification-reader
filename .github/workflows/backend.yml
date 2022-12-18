@@ -91,7 +91,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: rustup component add rustfmt
+      - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
