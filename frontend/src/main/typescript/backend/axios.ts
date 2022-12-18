@@ -15,7 +15,9 @@ export const axios = originalAxios.create({
 axios.interceptors.request.use(
   value => {
     const userSettings = accountModule.context(store);
-    value.headers["Authorization"] = `Bearer ${userSettings.state.accessToken}`;
+    if (value.headers != undefined) {
+      value.headers["Authorization"] = `Bearer ${userSettings.state.accessToken}`;
+    }
     return value;
   },
   error => Promise.reject(error)
