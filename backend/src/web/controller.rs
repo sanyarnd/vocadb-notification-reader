@@ -1,13 +1,13 @@
-use actix_web::{post, Responder, Result};
 use actix_web::http::header::Header;
-use actix_web::HttpRequest;
 use actix_web::web::Json;
+use actix_web::HttpRequest;
+use actix_web::{post, Responder, Result};
 use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
 use anyhow::Context;
 
-use crate::client::http_client::Client;
 use crate::client::errors::VocadbClientError;
-use crate::service::notifications::{Database, load_notification_details};
+use crate::client::http_client::Client;
+use crate::service::notifications::{load_notification_details, Database};
 use crate::web::dto::{
     LoginRequest, LoginResponse, NotificationsDeleteRequest, NotificationsFetchRequest,
     NotificationsFetchResponse, Token,

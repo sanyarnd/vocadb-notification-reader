@@ -25,7 +25,6 @@ jobs:
           toolchain: stable
 
       - run: cargo build --release --all-features
-      - run: cargo clippy --all-targets --all-features
 
       - uses: redhat-actions/podman-login@v1
         if: github.ref_name == 'master'
@@ -36,10 +35,10 @@ jobs:
 
       - run: >
           podman build
-            --file Dockerfile
-            --tag ghcr.io/${{ github.repository }}:latest
-            --tag ghcr.io/${{ github.repository }}:${{ github.sha }}
-            .
+          --file Dockerfile
+          --tag ghcr.io/${{ github.repository }}:latest
+          --tag ghcr.io/${{ github.repository }}:${{ github.sha }}
+          .
         if: github.ref_name == 'master'
       - run: |
           podman push ghcr.io/${{ github.repository }}:latest
@@ -51,3 +50,43 @@ jobs:
         with:
           package-name: ${{ github.event.repository.name }}
           min-versions-to-keep: 3
+
+  #  test:
+  #    name: Test Suite
+  #    runs-on: ubuntu-latest
+  #    steps:
+  #      - uses: actions/checkout@v3
+  #      - uses: actions-rs/toolchain@v1
+  #        with:
+  #          toolchain: stable
+  #      - run: cargo test
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo check
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: rustup component add rustfmt
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo clippy --all-targets --all-features

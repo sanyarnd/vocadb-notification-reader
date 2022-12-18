@@ -97,7 +97,7 @@ impl<'a> Client<'a> {
         debug!("Response: {}", String::from_utf8(body.to_vec()).unwrap());
         let json = serde_json::from_slice(&body).context("Unable to deserialize a payload")?;
 
-         Ok(json)
+        Ok(json)
     }
 
     async fn http_delete_void<T>(&self, url: &String, query: &T) -> Result<()>
