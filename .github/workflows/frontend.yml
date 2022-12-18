@@ -54,4 +54,4 @@ jobs:
 
       - run: |
           ssh $REMOTE "mkdir -p deploy/nginx/html/vocadb-notification-reader"
-          rsync --recursive --ignore-existing --delete dist/ $REMOTE:~/deploy/nginx/html/vocadb-notification-reader
+          rsync --recursive --delete dist/ $REMOTE:~/deploy/nginx/html/vocadb-notification-reader
