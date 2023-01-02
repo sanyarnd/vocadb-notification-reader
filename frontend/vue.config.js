@@ -10,6 +10,10 @@ module.exports = {
     login: {
       title: "Login",
       entry: "src/main/typescript/pages/login/main.ts"
+    },
+    index: {
+      title: "VocaDB Notification Reader",
+      entry: "src/main/typescript/pages/home/main.ts"
     }
   },
 
