@@ -1,4 +1,4 @@
-FROM rust:1.90-slim-bookworm AS builder
+FROM rust:1.98-slim-bookworm AS builder
 WORKDIR /build
 
 # Cache dependencies separately from the application sources.
