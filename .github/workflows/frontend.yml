@@ -1,57 +1,61 @@
-name: Frontend Build
+name: Frontend
 
 on:
   workflow_dispatch:
   push:
+    branches: [master]
+    paths:
+      - .github/workflows/frontend.yml
+      - frontend/**
+  pull_request:
     paths:
       - .github/workflows/frontend.yml
       - frontend/**
 
-env:
-  REMOTE: handystuff.net
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend
 
 jobs:
+  check:
+    name: Lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm audit --omit=dev --audit-level=high
+
   build:
-    runs-on: ubuntu-latest
     name: Build
-    defaults:
-      run:
-        working-directory: frontend
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
-
-      - run: yarn --frozen-lockfile
-      - run: yarn run build:prod
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: dist
-          path: frontend/dist
-
-  deploy:
     runs-on: ubuntu-latest
-    name: Deploy
-    needs: [ build ]
-    if: github.ref_name == 'master'
-
+    needs: [check]
     steps:
-      - name: Configure SSH
-        run: |
-          mkdir ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
-          echo "${{ secrets.DEPLOY_SSH_CONFIG }}" > ~/.ssh/config
-          echo "${{ secrets.DEPLOY_SSH_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 700 ~/.ssh && chmod 600 ~/.ssh/deploy_key
-
-      - uses: actions/download-artifact@v3
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          name: dist
-          path: dist
-
-      - run: |
-          ssh $REMOTE "mkdir -p deploy/nginx/html/vocadb-notification-reader"
-          rsync --recursive --delete dist/ $REMOTE:~/deploy/nginx/html/vocadb-notification-reader
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          # Backend URL baked into the bundle, configured in repository variables.
+          VITE_API_URL: ${{ vars.API_URL }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
