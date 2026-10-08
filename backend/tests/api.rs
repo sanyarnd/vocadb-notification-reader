@@ -4,6 +4,7 @@ use axum::http::{Request, StatusCode, header};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
+use vocadb_notification_reader::kv::Kv;
 use vocadb_notification_reader::service::Database;
 use vocadb_notification_reader::session::{Session, SessionStore};
 use vocadb_notification_reader::web::{AppState, router};
@@ -15,6 +16,7 @@ const SESSION_COOKIE: &str = ".AspNetCore.Cookies=session";
 
 struct TestApp {
     vocadb: MockServer,
+    kv: Kv,
     sessions: SessionStore,
     router: Router,
 }
@@ -22,15 +24,17 @@ struct TestApp {
 impl TestApp {
     async fn new() -> Self {
         let vocadb = MockServer::start().await;
-        let sessions = SessionStore::memory();
+        let kv = Kv::memory();
+        let sessions = SessionStore::new(kv.clone());
         let urls = Database::ALL
             .into_iter()
             .map(|db| (db, vocadb.uri()))
             .collect();
-        let router = router(AppState::new(sessions.clone(), urls).unwrap());
+        let router = router(AppState::new(kv.clone(), urls).unwrap());
 
         TestApp {
             vocadb,
+            kv,
             sessions,
             router,
         }
@@ -41,6 +45,7 @@ impl TestApp {
             user_id: USER_ID,
             database: Database::VocaDb,
             cookies: vec![SESSION_COOKIE.to_string()],
+            expires_at: None,
         };
         self.sessions.create(&session).await.unwrap()
     }
@@ -116,7 +121,12 @@ async fn login_returns_token_with_session_cookies() {
             ResponseTemplate::new(302)
                 .insert_header("location", "/")
                 .append_header("set-cookie", "unrelated=1; path=/")
-                .append_header("set-cookie", format!("{SESSION_COOKIE}; path=/; httponly")),
+                .append_header(
+                    "set-cookie",
+                    format!(
+                        "{SESSION_COOKIE}; expires=Fri, 01 Jan 2100 00:00:00 GMT; path=/; httponly"
+                    ),
+                ),
         )
         .expect(1)
         .mount(&app.vocadb)
@@ -144,6 +154,7 @@ async fn login_returns_token_with_session_cookies() {
             user_id: USER_ID,
             database: Database::UtaiteDb,
             cookies: vec![SESSION_COOKIE.to_string()],
+            expires_at: "2100-01-01T00:00:00Z".parse().ok(),
         }
     );
 }
@@ -218,19 +229,80 @@ async fn current_user_is_proxied() {
 }
 
 #[tokio::test]
-async fn expired_upstream_session_is_unauthorized() {
+async fn expired_upstream_session_ends_the_session() {
     let app = TestApp::new().await;
     Mock::given(method("GET"))
         .and(path("/api/users/current"))
         .respond_with(ResponseTemplate::new(401))
         .mount(&app.vocadb)
         .await;
+    let token = app.token().await;
 
     let (status, _) = app
-        .post("/api/users/current", Some(&app.token().await), json!({}))
+        .post("/api/users/current", Some(&token), json!({}))
         .await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(app.sessions.get(&token).await.unwrap(), None);
+}
+
+#[tokio::test]
+async fn redirect_to_login_ends_the_session() {
+    let app = TestApp::new().await;
+    Mock::given(method("GET"))
+        .and(path("/api/users/current"))
+        .respond_with(
+            ResponseTemplate::new(302)
+                .insert_header("location", "/User/Login?ReturnUrl=%2Fapi%2Fusers%2Fcurrent"),
+        )
+        .mount(&app.vocadb)
+        .await;
+    let token = app.token().await;
+
+    let (status, _) = app
+        .post("/api/users/current", Some(&token), json!({}))
+        .await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(app.sessions.get(&token).await.unwrap(), None);
+}
+
+#[tokio::test]
+async fn refreshed_upstream_cookies_are_saved() {
+    let app = TestApp::new().await;
+    Mock::given(method("GET"))
+        .and(path("/api/users/current"))
+        .and(header_eq("cookie", SESSION_COOKIE))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(user_json())
+                .insert_header(
+                    "set-cookie",
+                    ".AspNetCore.Cookies=refreshed; expires=Fri, 01 Jan 2100 00:00:00 GMT; path=/",
+                ),
+        )
+        .expect(1)
+        .mount(&app.vocadb)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/users/current"))
+        .and(header_eq("cookie", ".AspNetCore.Cookies=refreshed"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(user_json()))
+        .expect(1)
+        .mount(&app.vocadb)
+        .await;
+    let token = app.token().await;
+
+    for _ in 0..2 {
+        let (status, _) = app
+            .post("/api/users/current", Some(&token), json!({}))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let session = app.sessions.get(&token).await.unwrap().unwrap();
+    assert_eq!(session.cookies, [".AspNetCore.Cookies=refreshed"]);
+    assert_eq!(session.expires_at, "2100-01-01T00:00:00Z".parse().ok());
 }
 
 #[tokio::test]
@@ -317,18 +389,25 @@ async fn fetch_notifications() {
                 }
             ]
         })))
+        .expect(1)
         .mount(server)
         .await;
 
-    let (status, body) = app
-        .post(
+    let token = app.token().await;
+    let fetch = || {
+        app.post(
             "/api/notifications/fetch",
-            Some(&app.token().await),
+            Some(&token),
             json!({ "startOffset": 10, "maxResults": 3, "language": "Romaji" }),
         )
-        .await;
-
+    };
+    let (status, body) = fetch().await;
     assert_eq!(status, StatusCode::OK, "{body}");
+
+    // Messages and songs are served from the cache the second time.
+    let (status, cached) = fetch().await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cached, body);
     assert_eq!(body["totalCount"], 13);
 
     let notifications = body["notifications"].as_array().unwrap();
@@ -409,6 +488,37 @@ async fn delete_notifications() {
         .await;
 
     assert_eq!((status, body), (StatusCode::OK, Value::Null));
+}
+
+#[tokio::test]
+async fn deleted_messages_are_evicted_from_cache() {
+    use vocadb_notification_reader::cache::{Cache, MESSAGE_TTL};
+
+    let app = TestApp::new().await;
+    Mock::given(method("DELETE"))
+        .and(path(format!("/api/users/{USER_ID}/messages")))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&app.vocadb)
+        .await;
+
+    // Seed the cache through the same store the app uses.
+    let kv = &app.kv;
+    let key = Cache::message_key(Database::VocaDb, USER_ID, 1);
+    kv.set(&key, "{}", MESSAGE_TTL).await.unwrap();
+    let other = Cache::message_key(Database::VocaDb, USER_ID, 2);
+    kv.set(&other, "{}", MESSAGE_TTL).await.unwrap();
+
+    let (status, _) = app
+        .post(
+            "/api/notifications/delete",
+            Some(&app.token().await),
+            json!({ "ids": [1] }),
+        )
+        .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(kv.get(&key).await.unwrap(), None);
+    assert!(kv.get(&other).await.unwrap().is_some());
 }
 
 #[tokio::test]

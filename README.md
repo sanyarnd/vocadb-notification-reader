@@ -27,14 +27,22 @@ Configuration is done through environment variables:
 | Variable               | Default        | Description                                                                                       |
 |------------------------|----------------|---------------------------------------------------------------------------------------------------|
 | `LISTEN_ADDR`          | `0.0.0.0:8080` | Address to listen on                                                                              |
-| `REDIS_URL`            | —              | Valkey/Redis for sessions, e.g. `redis://valkey:6379/0`. Required for production, see below      |
+| `REDIS_URL`            | —              | Valkey/Redis for sessions and cache, e.g. `redis://valkey:6379/0`. Required for production       |
 | `CORS_ALLOWED_ORIGINS` | —              | Comma separated list of origins allowed to call the API (e.g. the frontend CDN origin)           |
 | `RUST_LOG`             | `info`         | Log filter                                                                                        |
 
 Sessions live on the server: after login the client receives an opaque random token,
-while the VocaDB session cookies are kept in Valkey/Redis (stored under a SHA-256 of the token)
-and expire after a week of inactivity. `POST /api/logout` terminates a session.
-Without `REDIS_URL` sessions are kept in process memory, which is only suitable for development.
+while the VocaDB session cookies are kept in Valkey/Redis (stored under a SHA-256 of the token).
+A session lasts as long as VocaDB keeps the user signed in: it follows the expiration of the
+VocaDB auth cookie, picks up cookies VocaDB refreshes, and ends as soon as VocaDB rejects them
+(or on `POST /api/logout`). Sessions whose cookie has no expiration are dropped after a year
+without use.
+
+VocaDB responses are cached in the same storage: messages for 30 days, songs for an hour
+(per language), which keeps repeated page loads from hitting VocaDB.
+
+Without `REDIS_URL` sessions and cache are kept in process memory, which is only suitable
+for development. Sessions are long-lived, so enable persistence (AOF) for Valkey.
 
 ```yaml
 services:
@@ -49,7 +57,7 @@ services:
 
   valkey:
     image: valkey/valkey:8-alpine
-    command: ["valkey-server", "--save", "60", "1"]
+    command: ["valkey-server", "--appendonly", "yes"]
     volumes:
       - valkey:/data
 
