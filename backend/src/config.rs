@@ -4,14 +4,14 @@ use std::net::SocketAddr;
 use anyhow::Context;
 
 use crate::service::Database;
-use crate::token::TokenCodec;
 
 /// Application settings, read from environment variables.
 pub struct Config {
     /// `LISTEN_ADDR`, defaults to `0.0.0.0:8080`.
     pub listen_addr: SocketAddr,
-    /// `TOKEN_KEY`: hex encoded 32-byte key. A random key is used when it is missing.
-    pub token_codec: TokenCodec,
+    /// `REDIS_URL`: Valkey/Redis used to store sessions, e.g. `redis://valkey:6379/0`.
+    /// Sessions are kept in memory when it is missing.
+    pub redis_url: Option<String>,
     /// `CORS_ALLOWED_ORIGINS`: comma separated list of origins allowed to call the API.
     pub cors_allowed_origins: Vec<String>,
     /// Base URL for every supported database (overridable for testing).
@@ -25,13 +25,9 @@ impl Config {
             .parse()
             .context("LISTEN_ADDR must be a socket address")?;
 
-        let token_codec = match std::env::var("TOKEN_KEY") {
-            Ok(key) => TokenCodec::from_hex(&key).context("Invalid TOKEN_KEY")?,
-            Err(_) => {
-                tracing::warn!("TOKEN_KEY is not set, sessions will not survive a restart");
-                TokenCodec::random()
-            }
-        };
+        let redis_url = std::env::var("REDIS_URL")
+            .ok()
+            .filter(|url| !url.is_empty());
 
         let cors_allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
             .map(|origins| parse_list(&origins))
@@ -39,7 +35,7 @@ impl Config {
 
         Ok(Config {
             listen_addr,
-            token_codec,
+            redis_url,
             cors_allowed_origins,
             database_urls: default_database_urls(),
         })

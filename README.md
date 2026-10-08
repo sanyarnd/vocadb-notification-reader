@@ -18,7 +18,7 @@ Unofficial notification reader for:
 ```shell
 cd backend
 cargo run          # http://localhost:8080
-cargo test
+cargo test         # set TEST_REDIS_URL=redis://localhost:6379 to also test against Valkey/Redis
 cargo clippy --all-targets
 ```
 
@@ -27,17 +27,34 @@ Configuration is done through environment variables:
 | Variable               | Default        | Description                                                                                       |
 |------------------------|----------------|---------------------------------------------------------------------------------------------------|
 | `LISTEN_ADDR`          | `0.0.0.0:8080` | Address to listen on                                                                              |
-| `TOKEN_KEY`            | random         | Hex encoded 32-byte key used to encrypt session tokens. Without it sessions don't survive restart |
+| `REDIS_URL`            | —              | Valkey/Redis for sessions, e.g. `redis://valkey:6379/0`. Required for production, see below      |
 | `CORS_ALLOWED_ORIGINS` | —              | Comma separated list of origins allowed to call the API (e.g. the frontend CDN origin)           |
 | `RUST_LOG`             | `info`         | Log filter                                                                                        |
 
-Generate a key with `openssl rand -hex 32`.
+Sessions live on the server: after login the client receives an opaque random token,
+while the VocaDB session cookies are kept in Valkey/Redis (stored under a SHA-256 of the token)
+and expire after a week of inactivity. `POST /api/logout` terminates a session.
+Without `REDIS_URL` sessions are kept in process memory, which is only suitable for development.
 
-```shell
-docker run -p 8080:8080 \
-  -e TOKEN_KEY=... \
-  -e CORS_ALLOWED_ORIGINS=https://vocadb-notification-reader.example.com \
-  ghcr.io/sanyarnd/vocadb-notification-reader:latest
+```yaml
+services:
+  backend:
+    image: ghcr.io/sanyarnd/vocadb-notification-reader:latest
+    environment:
+      REDIS_URL: redis://valkey:6379/0
+      CORS_ALLOWED_ORIGINS: https://vocadb-notification-reader.example.com
+    ports:
+      - "8080:8080"
+    depends_on: [valkey]
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "60", "1"]
+    volumes:
+      - valkey:/data
+
+volumes:
+  valkey:
 ```
 
 `GET /health` can be used as a liveness probe.

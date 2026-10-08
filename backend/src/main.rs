@@ -12,12 +12,15 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env()?;
-    let listener = tokio::net::TcpListener::bind(config.listen_addr)
-        .await
-        .with_context(|| format!("Unable to bind {}", config.listen_addr))?;
-    tracing::info!("Listening on {}", config.listen_addr);
+    let listen_addr = config.listen_addr;
+    let app = web::app(config).await?;
 
-    axum::serve(listener, web::app(config)?)
+    let listener = tokio::net::TcpListener::bind(listen_addr)
+        .await
+        .with_context(|| format!("Unable to bind {listen_addr}"))?;
+    tracing::info!("Listening on {listen_addr}");
+
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .context("Server failed")

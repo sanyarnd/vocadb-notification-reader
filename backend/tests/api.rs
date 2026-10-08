@@ -1,12 +1,11 @@
 use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use chrono::Utc;
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 use vocadb_notification_reader::service::Database;
-use vocadb_notification_reader::token::{Token, TokenCodec};
+use vocadb_notification_reader::session::{Session, SessionStore};
 use vocadb_notification_reader::web::{AppState, router};
 use wiremock::matchers::{body_string_contains, header as header_eq, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -16,35 +15,34 @@ const SESSION_COOKIE: &str = ".AspNetCore.Cookies=session";
 
 struct TestApp {
     vocadb: MockServer,
-    codec: TokenCodec,
+    sessions: SessionStore,
     router: Router,
 }
 
 impl TestApp {
     async fn new() -> Self {
         let vocadb = MockServer::start().await;
-        let codec = TokenCodec::random();
+        let sessions = SessionStore::memory();
         let urls = Database::ALL
             .into_iter()
             .map(|db| (db, vocadb.uri()))
             .collect();
-        let router = router(AppState::new(codec.clone(), urls).unwrap());
+        let router = router(AppState::new(sessions.clone(), urls).unwrap());
 
         TestApp {
             vocadb,
-            codec,
+            sessions,
             router,
         }
     }
 
-    fn token(&self) -> String {
-        let token = Token::new(
-            USER_ID,
-            Database::VocaDb,
-            vec![SESSION_COOKIE.to_string()],
-            Utc::now(),
-        );
-        self.codec.encode(&token).unwrap()
+    async fn token(&self) -> String {
+        let session = Session {
+            user_id: USER_ID,
+            database: Database::VocaDb,
+            cookies: vec![SESSION_COOKIE.to_string()],
+        };
+        self.sessions.create(&session).await.unwrap()
     }
 
     async fn post(&self, uri: &str, token: Option<&str>, body: Value) -> (StatusCode, Value) {
@@ -134,13 +132,20 @@ async fn login_returns_token_with_session_cookies() {
         .await;
 
     assert_eq!(status, StatusCode::OK, "{body}");
-    let token = app
-        .codec
-        .decode(body["token"].as_str().unwrap(), Utc::now())
-        .unwrap();
-    assert_eq!(token.user_id, USER_ID);
-    assert_eq!(token.database, Database::UtaiteDb);
-    assert_eq!(token.cookies, vec![SESSION_COOKIE.to_string()]);
+    let session = app
+        .sessions
+        .get(body["token"].as_str().unwrap())
+        .await
+        .unwrap()
+        .expect("session must be stored");
+    assert_eq!(
+        session,
+        Session {
+            user_id: USER_ID,
+            database: Database::UtaiteDb,
+            cookies: vec![SESSION_COOKIE.to_string()],
+        }
+    );
 }
 
 #[tokio::test]
@@ -183,11 +188,10 @@ async fn malformed_payload_is_rejected() {
 #[tokio::test]
 async fn protected_endpoints_require_valid_token() {
     let app = TestApp::new().await;
-    let other_token = TokenCodec::random()
-        .encode(&Token::new(1, Database::VocaDb, vec![], Utc::now()))
-        .unwrap();
+    let deleted = app.token().await;
+    app.sessions.delete(&deleted).await.unwrap();
 
-    for token in [None, Some("garbage"), Some(other_token.as_str())] {
+    for token in [None, Some("garbage"), Some(deleted.as_str())] {
         for uri in ["/api/users/current", "/api/notifications/delete"] {
             let (status, _) = app.post(uri, token, json!({ "ids": [] })).await;
             assert_eq!(status, StatusCode::UNAUTHORIZED, "{uri} with {token:?}");
@@ -201,7 +205,7 @@ async fn current_user_is_proxied() {
     mock_current_user(&app.vocadb).await;
 
     let (status, body) = app
-        .post("/api/users/current", Some(&app.token()), json!({}))
+        .post("/api/users/current", Some(&app.token().await), json!({}))
         .await;
 
     assert_eq!(status, StatusCode::OK);
@@ -223,7 +227,7 @@ async fn expired_upstream_session_is_unauthorized() {
         .await;
 
     let (status, _) = app
-        .post("/api/users/current", Some(&app.token()), json!({}))
+        .post("/api/users/current", Some(&app.token().await), json!({}))
         .await;
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -239,7 +243,7 @@ async fn upstream_failure_is_bad_gateway() {
         .await;
 
     let (status, body) = app
-        .post("/api/users/current", Some(&app.token()), json!({}))
+        .post("/api/users/current", Some(&app.token().await), json!({}))
         .await;
 
     assert_eq!(status, StatusCode::BAD_GATEWAY);
@@ -319,7 +323,7 @@ async fn fetch_notifications() {
     let (status, body) = app
         .post(
             "/api/notifications/fetch",
-            Some(&app.token()),
+            Some(&app.token().await),
             json!({ "startOffset": 10, "maxResults": 3, "language": "Romaji" }),
         )
         .await;
@@ -368,7 +372,7 @@ async fn fetch_notifications() {
 #[tokio::test]
 async fn fetch_notifications_validates_paging() {
     let app = TestApp::new().await;
-    let token = app.token();
+    let token = app.token().await;
 
     for (start, max) in [(-1, 10), (0, -1), (0, 101)] {
         let (status, body) = app
@@ -399,7 +403,7 @@ async fn delete_notifications() {
     let (status, body) = app
         .post(
             "/api/notifications/delete",
-            Some(&app.token()),
+            Some(&app.token().await),
             json!({ "ids": [1, 2] }),
         )
         .await;
@@ -414,10 +418,11 @@ async fn cors_preflight_allows_configured_origins() {
 
     let app = app(Config {
         listen_addr: "127.0.0.1:0".parse().unwrap(),
-        token_codec: TokenCodec::random(),
+        redis_url: None,
         cors_allowed_origins: vec!["https://reader.example.com".to_string()],
         database_urls: default_database_urls(),
     })
+    .await
     .unwrap();
 
     let preflight = |origin: &str| {
@@ -453,4 +458,25 @@ async fn cors_preflight_allows_configured_origins() {
             .headers()
             .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN)
     );
+}
+
+#[tokio::test]
+async fn logout_invalidates_session() {
+    let app = TestApp::new().await;
+    mock_current_user(&app.vocadb).await;
+    let token = app.token().await;
+
+    let (status, _) = app
+        .post("/api/users/current", Some(&token), json!({}))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = app.post("/api/logout", Some(&token), json!({})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(app.sessions.get(&token).await.unwrap(), None);
+
+    let (status, _) = app
+        .post("/api/users/current", Some(&token), json!({}))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

@@ -9,7 +9,8 @@ import { useSettingsStore } from "@/stores/settings";
 vi.mock("@/api", () => ({
   api: {
     authenticate: vi.fn(),
-    accountData: vi.fn()
+    accountData: vi.fn(),
+    logout: vi.fn()
   }
 }));
 
@@ -70,6 +71,36 @@ describe("account store", () => {
     expect(store.isAuthenticated).toBe(false);
     expect(store.accountData).toBeNull();
     expect(localStorage.getItem("account.token")).toBeNull();
+  });
+});
+
+describe("account sign out", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("terminates the backend session", async () => {
+    vi.mocked(api.logout).mockResolvedValue();
+    const store = useAccountStore();
+    store.token = "token";
+
+    await store.signOut();
+
+    expect(api.logout).toHaveBeenCalledOnce();
+    expect(store.isAuthenticated).toBe(false);
+  });
+
+  it("forgets the session even if the backend fails", async () => {
+    vi.mocked(api.logout).mockRejectedValue(new Error("Network Error"));
+    const store = useAccountStore();
+    store.token = "token";
+
+    await store.signOut();
+
+    expect(store.isAuthenticated).toBe(false);
+  });
+
+  it("does not call the backend without a session", async () => {
+    await useAccountStore().signOut();
+    expect(api.logout).not.toHaveBeenCalled();
   });
 });
 

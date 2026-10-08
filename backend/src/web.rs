@@ -13,7 +13,6 @@ use axum::{Json, Router};
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
-use chrono::Utc;
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
@@ -25,7 +24,7 @@ use crate::config::Config;
 use crate::error::AppError;
 use crate::service::dto::Notification;
 use crate::service::{Database, load_notification_details};
-use crate::token::{Token, TokenCodec};
+use crate::session::{Session, SessionStore};
 
 pub type Result<T, E = AppError> = core::result::Result<T, E>;
 
@@ -41,13 +40,13 @@ pub struct AppState {
 
 struct Inner {
     http: reqwest::Client,
-    token_codec: TokenCodec,
+    sessions: SessionStore,
     database_urls: HashMap<Database, String>,
 }
 
 impl AppState {
     pub fn new(
-        token_codec: TokenCodec,
+        sessions: SessionStore,
         database_urls: HashMap<Database, String>,
     ) -> anyhow::Result<Self> {
         let http = reqwest::Client::builder()
@@ -64,7 +63,7 @@ impl AppState {
         Ok(AppState {
             inner: Arc::new(Inner {
                 http,
-                token_codec,
+                sessions,
                 database_urls,
             }),
         })
@@ -87,6 +86,7 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .route("/login", post(login))
+        .route("/logout", post(logout))
         .route("/users/current", post(current_user))
         .route("/notifications/fetch", post(fetch_notifications))
         .route("/notifications/delete", post(delete_notifications));
@@ -97,8 +97,15 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub fn app(config: Config) -> anyhow::Result<Router> {
-    let state = AppState::new(config.token_codec, config.database_urls)?;
+pub async fn app(config: Config) -> anyhow::Result<Router> {
+    let sessions = match &config.redis_url {
+        Some(url) => SessionStore::redis(url).await?,
+        None => {
+            tracing::warn!("REDIS_URL is not set, sessions are kept in memory");
+            SessionStore::memory()
+        }
+    };
+    let state = AppState::new(sessions, config.database_urls)?;
     let mut app = router(state).layer(TraceLayer::new_for_http());
 
     if !config.cors_allowed_origins.is_empty() {
@@ -126,10 +133,13 @@ pub fn app(config: Config) -> anyhow::Result<Router> {
 #[from_request(via(Json), rejection(AppError))]
 pub struct AppJson<T>(pub T);
 
-/// Session restored from the bearer token.
-pub struct Session(pub Token);
+/// Session referenced by the bearer token.
+pub struct Authenticated {
+    pub id: String,
+    pub session: Session,
+}
 
-impl FromRequestParts<AppState> for Session {
+impl FromRequestParts<AppState> for Authenticated {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self> {
@@ -138,13 +148,15 @@ impl FromRequestParts<AppState> for Session {
                 .await
                 .map_err(|e| AppError::Unauthorized(e.to_string()))?;
 
-        let token = state
+        let id = bearer.token().to_string();
+        let session = state
             .inner
-            .token_codec
-            .decode(bearer.token(), Utc::now())
-            .map_err(|e| AppError::Unauthorized(format!("{e:#}")))?;
+            .sessions
+            .get(&id)
+            .await?
+            .ok_or_else(|| AppError::Unauthorized("Session has expired".to_string()))?;
 
-        Ok(Session(token))
+        Ok(Authenticated { id, session })
     }
 }
 
@@ -188,28 +200,32 @@ async fn login(
     client.login(&payload.username, &payload.password).await?;
     let user = client.current_user().await?;
 
-    let token = Token::new(
-        user.id,
-        payload.database,
-        client.cookies().to_vec(),
-        Utc::now(),
-    );
-    let token = state.inner.token_codec.encode(&token)?;
+    let session = Session {
+        user_id: user.id,
+        database: payload.database,
+        cookies: client.cookies().to_vec(),
+    };
+    let token = state.inner.sessions.create(&session).await?;
 
     Ok(Json(LoginResponse { token }))
 }
 
+async fn logout(State(state): State<AppState>, auth: Authenticated) -> Result<Json<()>> {
+    state.inner.sessions.delete(&auth.id).await?;
+    Ok(Json(()))
+}
+
 async fn current_user(
     State(state): State<AppState>,
-    Session(token): Session,
+    Authenticated { session, .. }: Authenticated,
 ) -> Result<Json<UserForApiContract>> {
-    let client = state.client(token.database, token.cookies)?;
+    let client = state.client(session.database, session.cookies)?;
     Ok(Json(client.current_user().await?))
 }
 
 async fn fetch_notifications(
     State(state): State<AppState>,
-    Session(token): Session,
+    Authenticated { session, .. }: Authenticated,
     AppJson(payload): AppJson<NotificationsFetchRequest>,
 ) -> Result<Json<NotificationsFetchResponse>> {
     if payload.start_offset < 0 || !(0..=MAX_RESULTS).contains(&payload.max_results) {
@@ -218,14 +234,14 @@ async fn fetch_notifications(
         )));
     }
 
-    let client = state.client(token.database, token.cookies)?;
+    let client = state.client(session.database, session.cookies)?;
     let messages = client
-        .get_messages(token.user_id, payload.start_offset, payload.max_results)
+        .get_messages(session.user_id, payload.start_offset, payload.max_results)
         .await?;
 
     let notifications = futures::stream::iter(messages.items)
         .map(|message| {
-            load_notification_details(&client, token.database, payload.language, message.id)
+            load_notification_details(&client, session.database, payload.language, message.id)
         })
         .buffered(UPSTREAM_CONCURRENCY)
         .try_collect()
@@ -239,12 +255,14 @@ async fn fetch_notifications(
 
 async fn delete_notifications(
     State(state): State<AppState>,
-    Session(token): Session,
+    Authenticated { session, .. }: Authenticated,
     AppJson(payload): AppJson<NotificationsDeleteRequest>,
 ) -> Result<Json<()>> {
     if !payload.ids.is_empty() {
-        let client = state.client(token.database, token.cookies)?;
-        client.delete_messages(token.user_id, &payload.ids).await?;
+        let client = state.client(session.database, session.cookies)?;
+        client
+            .delete_messages(session.user_id, &payload.ids)
+            .await?;
     }
     Ok(Json(()))
 }

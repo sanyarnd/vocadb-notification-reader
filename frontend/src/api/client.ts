@@ -33,8 +33,8 @@ export function createHttpClient(options: ApiClientOptions): AxiosInstance {
   });
 
   http.interceptors.response.use(undefined, error => {
-    const isLogin = error?.config?.url === LOGIN_URL;
-    if (axios.isAxiosError(error) && error.response?.status === 401 && !isLogin) {
+    const isSessionRequest = [LOGIN_URL, LOGOUT_URL].includes(error?.config?.url);
+    if (axios.isAxiosError(error) && error.response?.status === 401 && !isSessionRequest) {
       options.onUnauthorized();
     }
     return Promise.reject(error);
@@ -44,11 +44,16 @@ export function createHttpClient(options: ApiClientOptions): AxiosInstance {
 }
 
 const LOGIN_URL = "/api/login";
+const LOGOUT_URL = "/api/logout";
 
 export function createApi(http: AxiosInstance) {
   return {
     async authenticate(payload: AuthenticationPayload): Promise<AccessToken> {
       return (await http.post<AccessToken>(LOGIN_URL, payload)).data;
+    },
+
+    async logout(): Promise<void> {
+      await http.post(LOGOUT_URL);
     },
 
     async accountData(): Promise<AccountData> {

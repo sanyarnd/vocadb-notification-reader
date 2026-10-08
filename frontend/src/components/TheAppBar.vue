@@ -27,7 +27,7 @@ const languageItems = computed(() =>
 );
 
 async function logout(): Promise<void> {
-  account.logout();
+  await account.signOut();
   await router.push({ name: "login" });
 }
 </script>

@@ -81,6 +81,15 @@ describe("api client", () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
+  it("logs out without triggering the expired session handler", async () => {
+    const { api, mock, onUnauthorized } = setup();
+    mock.onPost("/api/logout").replyOnce(200, null).onPost("/api/logout").reply(401);
+
+    await expect(api.logout()).resolves.toBeUndefined();
+    await expect(api.logout()).rejects.toThrow();
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
   it("ignores other errors", async () => {
     const { api, mock, onUnauthorized } = setup();
     mock.onPost("/api/users/current").reply(502);

@@ -23,10 +23,22 @@ export const useAccountStore = defineStore("account", () => {
     accountData.value = await api.accountData();
   }
 
+  /** Forgets the session locally, e.g. when the backend reports it as expired. */
   function logout(): void {
     token.value = null;
     accountData.value = null;
   }
 
-  return { token, database, accountData, isAuthenticated, login, logout };
+  /** Terminates the session on the backend and forgets it locally. */
+  async function signOut(): Promise<void> {
+    try {
+      if (isAuthenticated.value) await api.logout();
+    } catch {
+      // The session is forgotten locally anyway.
+    } finally {
+      logout();
+    }
+  }
+
+  return { token, database, accountData, isAuthenticated, login, logout, signOut };
 });
