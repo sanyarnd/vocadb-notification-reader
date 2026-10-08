@@ -37,7 +37,9 @@ impl AppError {
             AppError::Unauthorized(_) | AppError::Client(ClientError::BadCredentials) => {
                 StatusCode::UNAUTHORIZED
             }
-            AppError::Client(ClientError::Http(_)) => StatusCode::BAD_GATEWAY,
+            AppError::Client(ClientError::Http(_) | ClientError::InvalidResponse(_)) => {
+                StatusCode::BAD_GATEWAY
+            }
             AppError::Unexpected(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

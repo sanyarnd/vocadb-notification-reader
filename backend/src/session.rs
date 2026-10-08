@@ -1,125 +1,100 @@
 //! Server side sessions.
 //!
 //! The client only gets an opaque random session ID; VocaDB cookies stay on the server.
-//! Sessions are stored in Valkey/Redis under a SHA-256 of the ID, so a storage dump
-//! doesn't contain usable bearer tokens.
+//! Sessions are stored under a SHA-256 of the ID, so a storage dump doesn't contain
+//! usable bearer tokens.
+//!
+//! A session lives as long as VocaDB keeps the user signed in: its lifetime follows
+//! the expiration of the VocaDB auth cookie, and it is removed as soon as VocaDB
+//! rejects the cookies.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Context;
-use redis::AsyncCommands;
-use redis::aio::ConnectionManager;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::time::Instant;
 
+use crate::kv::{KEY_PREFIX, Kv};
 use crate::service::Database;
 
-/// Sessions expire after this period of inactivity.
-pub const SESSION_TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
-const KEY_PREFIX: &str = "vocadb-notification-reader:session:";
+/// Lifetime of sessions whose VocaDB cookie has no expiration date, extended on every use.
+/// Only abandoned sessions ever reach it.
+pub const IDLE_TTL: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Session {
     pub user_id: i32,
     pub database: Database,
+    /// VocaDB cookies in the `name=value` form.
     pub cookies: Vec<String>,
+    /// Expiration of the VocaDB auth cookie, as announced by VocaDB.
+    #[serde(default)]
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+impl Session {
+    fn ttl(&self, now: DateTime<Utc>) -> Duration {
+        match self.expires_at {
+            Some(expires_at) => (expires_at - now).to_std().unwrap_or_default(),
+            None => IDLE_TTL,
+        }
+    }
 }
 
 #[derive(Clone)]
-pub enum SessionStore {
-    Redis(ConnectionManager),
-    /// Process local storage, intended for development and tests.
-    Memory(Arc<Mutex<HashMap<String, (Session, Instant)>>>),
+pub struct SessionStore {
+    kv: Kv,
 }
 
 impl SessionStore {
-    pub async fn redis(url: &str) -> anyhow::Result<Self> {
-        let client = redis::Client::open(url).context("Invalid session store URL")?;
-        let manager = client
-            .get_connection_manager()
-            .await
-            .context("Unable to connect to the session store")?;
-        Ok(SessionStore::Redis(manager))
+    pub fn new(kv: Kv) -> Self {
+        SessionStore { kv }
     }
 
-    pub fn memory() -> Self {
-        SessionStore::Memory(Arc::default())
-    }
-
-    /// Stores a session and returns its ID.
+    /// Stores a new session and returns its ID.
     pub async fn create(&self, session: &Session) -> anyhow::Result<String> {
         let id = generate_id()?;
-        let key = storage_key(&id);
-        match self {
-            SessionStore::Redis(redis) => {
-                let value =
-                    serde_json::to_string(session).context("Unable to serialize a session")?;
-                let _: () = redis
-                    .clone()
-                    .set_ex(key, value, SESSION_TTL.as_secs())
-                    .await
-                    .context("Unable to store a session")?;
-            }
-            SessionStore::Memory(map) => {
-                let mut map = map.lock().unwrap();
-                let now = Instant::now();
-                map.retain(|_, (_, expires)| *expires > now);
-                map.insert(key, (session.clone(), now + SESSION_TTL));
-            }
-        }
+        self.update(&id, session).await?;
         Ok(id)
     }
 
-    /// Looks a session up and extends its lifetime.
+    /// Replaces the session data, e.g. after VocaDB refreshed its cookies.
+    pub async fn update(&self, id: &str, session: &Session) -> anyhow::Result<()> {
+        let value = serde_json::to_string(session).context("Unable to serialize a session")?;
+        self.kv
+            .set(&storage_key(id), &value, session.ttl(Utc::now()))
+            .await
+            .context("Unable to store a session")
+    }
+
     pub async fn get(&self, id: &str) -> anyhow::Result<Option<Session>> {
         let key = storage_key(id);
-        match self {
-            SessionStore::Redis(redis) => {
-                let value: Option<String> = redis
-                    .clone()
-                    .get_ex(key, redis::Expiry::EX(SESSION_TTL.as_secs()))
-                    .await
-                    .context("Unable to load a session")?;
-                value
-                    .map(|v| serde_json::from_str(&v).context("Unable to deserialize a session"))
-                    .transpose()
-            }
-            SessionStore::Memory(map) => {
-                let mut map = map.lock().unwrap();
-                let now = Instant::now();
-                match map.get_mut(&key) {
-                    Some((session, expires)) if *expires > now => {
-                        *expires = now + SESSION_TTL;
-                        Ok(Some(session.clone()))
-                    }
-                    Some(_) => {
-                        map.remove(&key);
-                        Ok(None)
-                    }
-                    None => Ok(None),
-                }
-            }
+        let Some(value) = self
+            .kv
+            .get(&key)
+            .await
+            .context("Unable to load a session")?
+        else {
+            return Ok(None);
+        };
+        let session: Session =
+            serde_json::from_str(&value).context("Unable to deserialize a session")?;
+
+        if session.expires_at.is_none() {
+            self.kv
+                .expire(&key, IDLE_TTL)
+                .await
+                .context("Unable to extend a session")?;
         }
+        Ok(Some(session))
     }
 
     pub async fn delete(&self, id: &str) -> anyhow::Result<()> {
-        let key = storage_key(id);
-        match self {
-            SessionStore::Redis(redis) => {
-                let _: () = redis
-                    .clone()
-                    .del(key)
-                    .await
-                    .context("Unable to delete a session")?;
-            }
-            SessionStore::Memory(map) => {
-                map.lock().unwrap().remove(&key);
-            }
-        }
-        Ok(())
+        self.kv
+            .delete(&[storage_key(id)])
+            .await
+            .context("Unable to delete a session")
     }
 }
 
@@ -131,75 +106,97 @@ fn generate_id() -> anyhow::Result<String> {
 }
 
 fn storage_key(id: &str) -> String {
-    format!("{KEY_PREFIX}{}", hex::encode(Sha256::digest(id.as_bytes())))
+    format!(
+        "{KEY_PREFIX}session:{}",
+        hex::encode(Sha256::digest(id.as_bytes()))
+    )
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::TimeDelta;
+
     use super::*;
 
-    fn session() -> Session {
+    fn session(expires_at: Option<DateTime<Utc>>) -> Session {
         Session {
             user_id: 42,
             database: Database::TouhouDb,
             cookies: vec![".AspNetCore.Cookies=abc".to_string()],
+            expires_at,
         }
     }
 
-    /// Exercises the store contract; shared by the in-memory and Redis tests.
-    async fn check_store(store: SessionStore) {
-        let id = store.create(&session()).await.unwrap();
-        assert_eq!(id.len(), 64);
-        assert_eq!(store.get(&id).await.unwrap(), Some(session()));
+    async fn check_store(kv: Kv) {
+        let store = SessionStore::new(kv.clone());
 
-        let other = store.create(&session()).await.unwrap();
+        let id = store.create(&session(None)).await.unwrap();
+        assert_eq!(id.len(), 64);
+        assert_eq!(store.get(&id).await.unwrap(), Some(session(None)));
+        assert!(kv.ttl(&storage_key(&id)).await.unwrap().unwrap() > IDLE_TTL / 2);
+
+        let other = store.create(&session(None)).await.unwrap();
         assert_ne!(id, other);
+
+        // The lifetime follows the VocaDB cookie.
+        let expires_at = Utc::now() + TimeDelta::days(30);
+        store.update(&id, &session(Some(expires_at))).await.unwrap();
+        assert_eq!(
+            store.get(&id).await.unwrap(),
+            Some(session(Some(expires_at)))
+        );
+        let ttl = kv.ttl(&storage_key(&id)).await.unwrap().unwrap();
+        assert!(ttl <= Duration::from_secs(30 * 24 * 3600), "{ttl:?}");
+        assert!(ttl > Duration::from_secs(29 * 24 * 3600), "{ttl:?}");
 
         store.delete(&id).await.unwrap();
         assert_eq!(store.get(&id).await.unwrap(), None);
-        assert_eq!(store.get(&other).await.unwrap(), Some(session()));
+        assert_eq!(store.get(&other).await.unwrap(), Some(session(None)));
         assert_eq!(store.get("unknown").await.unwrap(), None);
+
+        // The raw ID is never used as a key.
+        assert_eq!(
+            kv.get(&format!("{KEY_PREFIX}session:{other}"))
+                .await
+                .unwrap(),
+            None
+        );
     }
 
     #[tokio::test]
     async fn memory_store() {
-        check_store(SessionStore::memory()).await;
+        check_store(Kv::memory()).await;
+    }
+
+    #[tokio::test]
+    async fn redis_store() {
+        if let Some(kv) = crate::kv::tests::redis().await {
+            check_store(kv).await;
+        }
     }
 
     #[tokio::test(start_paused = true)]
-    async fn memory_store_expires_idle_sessions() {
-        let store = SessionStore::memory();
-        let id = store.create(&session()).await.unwrap();
+    async fn sessions_without_cookie_expiration_are_extended_on_use() {
+        let store = SessionStore::new(Kv::memory());
+        let id = store.create(&session(None)).await.unwrap();
 
-        // Every access extends the session.
-        tokio::time::advance(SESSION_TTL - Duration::from_secs(1)).await;
-        assert!(store.get(&id).await.unwrap().is_some());
-        tokio::time::advance(SESSION_TTL - Duration::from_secs(1)).await;
-        assert!(store.get(&id).await.unwrap().is_some());
+        for _ in 0..3 {
+            tokio::time::advance(IDLE_TTL - Duration::from_secs(1)).await;
+            assert!(store.get(&id).await.unwrap().is_some());
+        }
 
-        tokio::time::advance(SESSION_TTL + Duration::from_secs(1)).await;
+        tokio::time::advance(IDLE_TTL + Duration::from_secs(1)).await;
         assert!(store.get(&id).await.unwrap().is_none());
     }
 
-    /// Runs against a real Valkey/Redis when `TEST_REDIS_URL` is set (it is in CI).
-    #[tokio::test]
-    async fn redis_store() {
-        let Ok(url) = std::env::var("TEST_REDIS_URL") else {
-            eprintln!("TEST_REDIS_URL is not set, skipping");
-            return;
-        };
-        let store = SessionStore::redis(&url).await.unwrap();
-        check_store(store.clone()).await;
-
-        // The raw ID must not be stored, and the TTL must be set.
-        let id = store.create(&session()).await.unwrap();
-        let SessionStore::Redis(mut redis) = store else {
-            unreachable!()
-        };
-        let raw: Option<String> = redis.get(format!("{KEY_PREFIX}{id}")).await.unwrap();
-        assert_eq!(raw, None);
-        let ttl: i64 = redis.ttl(storage_key(&id)).await.unwrap();
-        assert!(ttl > 0 && ttl <= SESSION_TTL.as_secs() as i64, "{ttl}");
+    #[test]
+    fn expired_cookie_means_expired_session() {
+        let now = Utc::now();
+        assert_eq!(
+            session(Some(now - TimeDelta::days(1))).ttl(now),
+            Duration::ZERO
+        );
+        assert_eq!(session(None).ttl(now), IDLE_TTL);
     }
 
     #[test]

@@ -18,12 +18,14 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-use crate::client::Client;
+use crate::cache::Cache;
 use crate::client::models::{LanguagePreference, UserForApiContract};
+use crate::client::{Client, ClientError};
 use crate::config::Config;
 use crate::error::AppError;
+use crate::kv::Kv;
 use crate::service::dto::Notification;
-use crate::service::{Database, load_notification_details};
+use crate::service::{Database, Source, load_notification_details};
 use crate::session::{Session, SessionStore};
 
 pub type Result<T, E = AppError> = core::result::Result<T, E>;
@@ -41,14 +43,12 @@ pub struct AppState {
 struct Inner {
     http: reqwest::Client,
     sessions: SessionStore,
+    cache: Cache,
     database_urls: HashMap<Database, String>,
 }
 
 impl AppState {
-    pub fn new(
-        sessions: SessionStore,
-        database_urls: HashMap<Database, String>,
-    ) -> anyhow::Result<Self> {
+    pub fn new(kv: Kv, database_urls: HashMap<Database, String>) -> anyhow::Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
@@ -63,13 +63,14 @@ impl AppState {
         Ok(AppState {
             inner: Arc::new(Inner {
                 http,
-                sessions,
+                sessions: SessionStore::new(kv.clone()),
+                cache: Cache::new(kv),
                 database_urls,
             }),
         })
     }
 
-    fn client(&self, database: Database, cookies: Vec<String>) -> Result<Client> {
+    fn client(&self, database: Database, session: Option<&Session>) -> Result<Client> {
         let base_url = self
             .inner
             .database_urls
@@ -78,7 +79,8 @@ impl AppState {
         Ok(Client::new(
             self.inner.http.clone(),
             base_url.clone(),
-            cookies,
+            session.map_or(&[], |s| s.cookies.as_slice()),
+            session.and_then(|s| s.expires_at),
         ))
     }
 }
@@ -98,14 +100,14 @@ pub fn router(state: AppState) -> Router {
 }
 
 pub async fn app(config: Config) -> anyhow::Result<Router> {
-    let sessions = match &config.redis_url {
-        Some(url) => SessionStore::redis(url).await?,
+    let kv = match &config.redis_url {
+        Some(url) => Kv::redis(url).await?,
         None => {
-            tracing::warn!("REDIS_URL is not set, sessions are kept in memory");
-            SessionStore::memory()
+            tracing::warn!("REDIS_URL is not set, sessions and cache are kept in memory");
+            Kv::memory()
         }
     };
-    let state = AppState::new(sessions, config.database_urls)?;
+    let state = AppState::new(kv, config.database_urls)?;
     let mut app = router(state).layer(TraceLayer::new_for_http());
 
     if !config.cors_allowed_origins.is_empty() {
@@ -160,6 +162,34 @@ impl FromRequestParts<AppState> for Authenticated {
     }
 }
 
+impl Authenticated {
+    fn client(&self, state: &AppState) -> Result<Client> {
+        state.client(self.session.database, Some(&self.session))
+    }
+
+    /// Keeps the stored session in sync with VocaDB: saves refreshed cookies and
+    /// forgets the session once VocaDB rejects it.
+    async fn sync<T>(&self, state: &AppState, client: &Client, result: Result<T>) -> Result<T> {
+        let sessions = &state.inner.sessions;
+        if matches!(result, Err(AppError::Client(ClientError::BadCredentials))) {
+            tracing::info!("VocaDB session of user {} has ended", self.session.user_id);
+            if let Err(e) = sessions.delete(&self.id).await {
+                tracing::warn!("{e:#}");
+            }
+        } else if client.take_cookies_changed() {
+            let session = Session {
+                cookies: client.cookies(),
+                expires_at: client.expires_at(),
+                ..self.session.clone()
+            };
+            if let Err(e) = sessions.update(&self.id, &session).await {
+                tracing::warn!("{e:#}");
+            }
+        }
+        result
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct LoginRequest {
     pub username: String,
@@ -196,14 +226,15 @@ async fn login(
     State(state): State<AppState>,
     AppJson(payload): AppJson<LoginRequest>,
 ) -> Result<Json<LoginResponse>> {
-    let mut client = state.client(payload.database, vec![])?;
+    let client = state.client(payload.database, None)?;
     client.login(&payload.username, &payload.password).await?;
     let user = client.current_user().await?;
 
     let session = Session {
         user_id: user.id,
         database: payload.database,
-        cookies: client.cookies().to_vec(),
+        cookies: client.cookies(),
+        expires_at: client.expires_at(),
     };
     let token = state.inner.sessions.create(&session).await?;
 
@@ -217,15 +248,16 @@ async fn logout(State(state): State<AppState>, auth: Authenticated) -> Result<Js
 
 async fn current_user(
     State(state): State<AppState>,
-    Authenticated { session, .. }: Authenticated,
+    auth: Authenticated,
 ) -> Result<Json<UserForApiContract>> {
-    let client = state.client(session.database, session.cookies)?;
-    Ok(Json(client.current_user().await?))
+    let client = auth.client(&state)?;
+    let result = client.current_user().await.map_err(AppError::from);
+    Ok(Json(auth.sync(&state, &client, result).await?))
 }
 
 async fn fetch_notifications(
     State(state): State<AppState>,
-    Authenticated { session, .. }: Authenticated,
+    auth: Authenticated,
     AppJson(payload): AppJson<NotificationsFetchRequest>,
 ) -> Result<Json<NotificationsFetchResponse>> {
     if payload.start_offset < 0 || !(0..=MAX_RESULTS).contains(&payload.max_results) {
@@ -234,35 +266,59 @@ async fn fetch_notifications(
         )));
     }
 
-    let client = state.client(session.database, session.cookies)?;
-    let messages = client
-        .get_messages(session.user_id, payload.start_offset, payload.max_results)
-        .await?;
+    let client = auth.client(&state)?;
+    let source = Source {
+        client: &client,
+        cache: &state.inner.cache,
+        database: auth.session.database,
+        user_id: auth.session.user_id,
+    };
+    let result = async {
+        let messages = client
+            .get_messages(source.user_id, payload.start_offset, payload.max_results)
+            .await?;
 
-    let notifications = futures::stream::iter(messages.items)
-        .map(|message| {
-            load_notification_details(&client, session.database, payload.language, message.id)
+        let notifications = futures::stream::iter(messages.items)
+            .map(|message| load_notification_details(&source, payload.language, message.id))
+            .buffered(UPSTREAM_CONCURRENCY)
+            .try_collect()
+            .await?;
+
+        Ok(NotificationsFetchResponse {
+            notifications,
+            total_count: messages.total_count,
         })
-        .buffered(UPSTREAM_CONCURRENCY)
-        .try_collect()
-        .await?;
+    }
+    .await;
 
-    Ok(Json(NotificationsFetchResponse {
-        notifications,
-        total_count: messages.total_count,
-    }))
+    Ok(Json(auth.sync(&state, &client, result).await?))
 }
 
 async fn delete_notifications(
     State(state): State<AppState>,
-    Authenticated { session, .. }: Authenticated,
+    auth: Authenticated,
     AppJson(payload): AppJson<NotificationsDeleteRequest>,
 ) -> Result<Json<()>> {
-    if !payload.ids.is_empty() {
-        let client = state.client(session.database, session.cookies)?;
-        client
-            .delete_messages(session.user_id, &payload.ids)
-            .await?;
+    if payload.ids.is_empty() {
+        return Ok(Json(()));
     }
+
+    let client = auth.client(&state)?;
+    let Session {
+        database, user_id, ..
+    } = auth.session;
+    let result = client
+        .delete_messages(user_id, &payload.ids)
+        .await
+        .map_err(AppError::from);
+    auth.sync(&state, &client, result).await?;
+
+    let keys: Vec<String> = payload
+        .ids
+        .iter()
+        .map(|&id| Cache::message_key(database, user_id, id))
+        .collect();
+    state.inner.cache.evict(&keys).await;
+
     Ok(Json(()))
 }

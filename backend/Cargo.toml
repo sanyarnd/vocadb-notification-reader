@@ -38,6 +38,7 @@ redis = { version = "1", default-features = false, features = ["tokio-comp", "co
 getrandom = "0.4"
 sha2 = "0.11"
 hex = "0.4"
+cookie = "0.18"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

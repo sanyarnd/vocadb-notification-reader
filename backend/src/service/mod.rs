@@ -7,7 +7,8 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::client::models::{LanguagePreference, UserMessageContract};
+use crate::cache::{Cache, MESSAGE_TTL, SONG_TTL};
+use crate::client::models::{LanguagePreference, SongForApiContract, UserMessageContract};
 use crate::client::{Client, Result};
 use crate::service::dto::{
     BaseNotification, Notification, PV, SongNotification, SongNotificationType, Tag,
@@ -85,19 +86,34 @@ pub fn classify_message(database: Database, subject: &str, body: &str) -> Messag
     }
 }
 
+/// Where notifications are loaded from.
+pub struct Source<'a> {
+    pub client: &'a Client,
+    pub cache: &'a Cache,
+    pub database: Database,
+    pub user_id: i32,
+}
+
 pub async fn load_notification_details(
-    client: &Client,
-    database: Database,
+    source: &Source<'_>,
     language: LanguagePreference,
     message_id: i32,
 ) -> Result<Notification> {
-    let message = client.get_message(message_id).await?;
+    let database = source.database;
+    let message: UserMessageContract = source
+        .cache
+        .get_or_fetch(
+            &Cache::message_key(database, source.user_id, message_id),
+            MESSAGE_TTL,
+            source.client.get_message_json(message_id),
+        )
+        .await?;
     let kind = classify_message(database, &message.subject, &message.body);
     let base = base_notification(message);
 
     Ok(match kind {
         MessageKind::Song(song_id) => {
-            Notification::Song(song_notification(client, song_id, base, language).await?)
+            Notification::Song(song_notification(source, song_id, base, language).await?)
         }
         MessageKind::Artist => Notification::Artist(base),
         MessageKind::Album => Notification::Album(base),
@@ -117,12 +133,19 @@ fn base_notification(message: UserMessageContract) -> BaseNotification {
 }
 
 async fn song_notification(
-    client: &Client,
+    source: &Source<'_>,
     song_id: i32,
     base: BaseNotification,
     language: LanguagePreference,
 ) -> Result<SongNotification> {
-    let song = client.get_song_by_id(song_id, language).await?;
+    let song: SongForApiContract = source
+        .cache
+        .get_or_fetch(
+            &Cache::song_key(source.database, song_id, language),
+            SONG_TTL,
+            source.client.get_song_json(song_id, language),
+        )
+        .await?;
 
     let song_notification_type = if base.original_subject.contains("tagged") {
         SongNotificationType::Tagged
