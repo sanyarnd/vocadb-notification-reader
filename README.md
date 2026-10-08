@@ -65,7 +65,23 @@ volumes:
   valkey:
 ```
 
-`GET /health` can be used as a liveness probe.
+### API
+
+| Method   | Path                                                  | Description                                    |
+|----------|-------------------------------------------------------|------------------------------------------------|
+| `POST`   | `/api/session`                                        | Log in, sets the `__Host-session` cookie       |
+| `DELETE` | `/api/session`                                        | Log out                                        |
+| `GET`    | `/api/me`                                             | Current account, extends the cookie            |
+| `GET`    | `/api/notifications?offset=0&limit=25&language=Default` | Page of notifications                        |
+| `DELETE` | `/api/notifications`                                  | Delete notifications, body: `{ "ids": [...] }` |
+| `GET`    | `/health`                                             | Liveness probe                                 |
+
+The session cookie is `HttpOnly`, `Secure` and `SameSite=Strict`, so the frontend and the API must be
+served from the same site (e.g. `foobar.com` and `api.foobar.com`). State changing requests are only
+accepted from the API's own origin or `CORS_ALLOWED_ORIGINS`.
+
+TypeScript types of the API are generated from the Rust types into `frontend/src/api/generated`
+by `cargo test`; CI fails when they are out of date.
 
 ## Frontend
 

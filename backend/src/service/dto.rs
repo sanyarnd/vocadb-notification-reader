@@ -1,10 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::client::models::{PVContract, PvService, PvType, SongType};
 
 /// Notification as returned to the frontend; the variant name is stored in `notificationType`.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, TS)]
+#[ts(export)]
 #[serde(tag = "notificationType")]
 pub enum Notification {
     #[serde(rename = "SongNotification")]
@@ -21,17 +23,18 @@ pub enum Notification {
     Unknown(BaseNotification),
 }
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct BaseNotification {
     pub id: i32,
-    #[serde(rename = "originalSubject")]
     pub original_subject: String,
-    #[serde(rename = "originalBody")]
     pub original_body: String,
     pub created_date: DateTime<Utc>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct SongNotification {
     #[serde(flatten)]
@@ -47,13 +50,15 @@ pub struct SongNotification {
     pub release_date: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, TS)]
+#[ts(export)]
 pub enum SongNotificationType {
     Tagged,
     New,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
     pub id: i32,
@@ -62,7 +67,8 @@ pub struct Tag {
     pub category_name: Option<String>,
 }
 
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Debug, PartialEq, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct PV {
     pub id: i32,

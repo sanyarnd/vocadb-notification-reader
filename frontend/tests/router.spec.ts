@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAppRouter } from "@/router";
 import { useAccountStore } from "@/stores/account";
 
+import { account } from "./fixtures";
+
 vi.mock("@/views/HomeView.vue", () => ({ default: { template: "<div />" } }));
 vi.mock("@/views/LoginView.vue", () => ({ default: { template: "<div />" } }));
 
@@ -17,7 +19,7 @@ describe("router", () => {
   });
 
   it("lets authenticated users in and away from login", async () => {
-    useAccountStore().token = "token";
+    useAccountStore().account = account();
     const router = createAppRouter();
 
     await router.push("/login");
@@ -28,7 +30,7 @@ describe("router", () => {
   });
 
   it("redirects unknown paths home", async () => {
-    useAccountStore().token = "token";
+    useAccountStore().account = account();
     const router = createAppRouter();
     await router.push("/does/not/exist");
     expect(router.currentRoute.value.name).toBe("home");

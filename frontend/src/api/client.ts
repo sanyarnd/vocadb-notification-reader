@@ -1,39 +1,25 @@
 import axios, { type AxiosInstance } from "axios";
 
-import type {
-  AccessToken,
-  AccountData,
-  AuthenticationPayload,
-  NotificationsResponse,
-  RequestLanguage
-} from "@/api/dto";
+import type { Account, LoginRequest, NotificationsResponse, RequestLanguage } from "@/api/dto";
 
 export interface ApiClientOptions {
   baseURL: string;
-  /** Returns the current access token, if any. */
-  getToken: () => string | null;
-  /** Called when an authenticated request is rejected with 401. */
+  /** Called when the backend reports that the session has ended. */
   onUnauthorized: () => void;
 }
+
+const SESSION_URL = "/api/session";
 
 export function createHttpClient(options: ApiClientOptions): AxiosInstance {
   const http = axios.create({
     baseURL: options.baseURL,
     timeout: 45_000,
-    // Lets an authenticating reverse proxy (e.g. Authelia) see its session cookie.
+    // The session lives in an httpOnly cookie of the API host.
     withCredentials: true
   });
 
-  http.interceptors.request.use(config => {
-    const token = options.getToken();
-    if (token !== null) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  });
-
   http.interceptors.response.use(undefined, error => {
-    const isSessionRequest = [LOGIN_URL, LOGOUT_URL].includes(error?.config?.url);
+    const isSessionRequest = error?.config?.url === SESSION_URL;
     if (axios.isAxiosError(error) && error.response?.status === 401 && !isSessionRequest) {
       options.onUnauthorized();
     }
@@ -43,34 +29,31 @@ export function createHttpClient(options: ApiClientOptions): AxiosInstance {
   return http;
 }
 
-const LOGIN_URL = "/api/login";
-const LOGOUT_URL = "/api/logout";
-
 export function createApi(http: AxiosInstance) {
   return {
-    async authenticate(payload: AuthenticationPayload): Promise<AccessToken> {
-      return (await http.post<AccessToken>(LOGIN_URL, payload)).data;
+    async login(payload: LoginRequest): Promise<Account> {
+      return (await http.post<Account>(SESSION_URL, payload)).data;
     },
 
     async logout(): Promise<void> {
-      await http.post(LOGOUT_URL);
+      await http.delete(SESSION_URL);
     },
 
-    async accountData(): Promise<AccountData> {
-      return (await http.post<AccountData>("/api/users/current")).data;
+    async me(): Promise<Account> {
+      return (await http.get<Account>("/api/me")).data;
     },
 
     async notifications(
-      maxResults: number,
-      startOffset: number,
+      limit: number,
+      offset: number,
       language: RequestLanguage
     ): Promise<NotificationsResponse> {
-      const payload = { startOffset, maxResults, language };
-      return (await http.post<NotificationsResponse>("/api/notifications/fetch", payload)).data;
+      const params = { offset, limit, language };
+      return (await http.get<NotificationsResponse>("/api/notifications", { params })).data;
     },
 
     async deleteNotifications(ids: number[]): Promise<void> {
-      await http.post("/api/notifications/delete", { ids });
+      await http.delete("/api/notifications", { data: { ids } });
     }
   };
 }

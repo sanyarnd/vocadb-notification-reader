@@ -3,36 +3,44 @@ import { defineStore } from "pinia";
 import { computed } from "vue";
 
 import { api } from "@/api";
-import type { AccountData, AuthenticationPayload, Database } from "@/api/dto";
+import type { Account, Database, LoginRequest } from "@/api/dto";
 
+// Leftovers of the bearer token based sessions.
+for (const key of ["account.token", "account.data"]) localStorage.removeItem(key);
+
+/**
+ * The session itself is an httpOnly cookie the frontend can't see; the account is kept
+ * locally to render the UI right away and is refreshed from the backend.
+ */
 export const useAccountStore = defineStore("account", () => {
-  const token = useLocalStorage<string | null>("account.token", null, {
-    serializer: StorageSerializers.string
-  });
-  const database = useLocalStorage<Database>("account.database", "VocaDb");
-  const accountData = useLocalStorage<AccountData | null>("account.data", null, {
+  const account = useLocalStorage<Account | null>("account", null, {
     serializer: StorageSerializers.object
   });
+  /** Database chosen on the last login, preselected on the login page. */
+  const lastDatabase = useLocalStorage<Database>("account.lastDatabase", "VocaDb");
 
-  const isAuthenticated = computed(() => token.value !== null && token.value !== "");
+  const isAuthenticated = computed(() => account.value !== null);
+  const database = computed(() => account.value?.database ?? lastDatabase.value);
 
-  async function login(payload: AuthenticationPayload): Promise<void> {
-    const response = await api.authenticate(payload);
-    token.value = response.token;
-    database.value = payload.database;
-    accountData.value = await api.accountData();
+  async function login(payload: LoginRequest): Promise<void> {
+    account.value = await api.login(payload);
+    lastDatabase.value = payload.database;
   }
 
-  /** Forgets the session locally, e.g. when the backend reports it as expired. */
+  /** Re-validates the session; a 401 ends up in [logout] through the API client. */
+  async function refresh(): Promise<void> {
+    account.value = await api.me();
+  }
+
+  /** Forgets the session locally, e.g. when the backend reports it as ended. */
   function logout(): void {
-    token.value = null;
-    accountData.value = null;
+    account.value = null;
   }
 
   /** Terminates the session on the backend and forgets it locally. */
   async function signOut(): Promise<void> {
     try {
-      if (isAuthenticated.value) await api.logout();
+      await api.logout();
     } catch {
       // The session is forgotten locally anyway.
     } finally {
@@ -40,5 +48,14 @@ export const useAccountStore = defineStore("account", () => {
     }
   }
 
-  return { token, database, accountData, isAuthenticated, login, logout, signOut };
+  return {
+    account,
+    lastDatabase,
+    database,
+    isAuthenticated,
+    login,
+    refresh,
+    logout,
+    signOut
+  };
 });

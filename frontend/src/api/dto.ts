@@ -1,47 +1,43 @@
-export const databases = ["VocaDb", "TouhouDb", "UtaiteDb"] as const;
-export type Database = (typeof databases)[number];
+// API types are generated from the backend (`cargo test` in `backend/`), see `./generated`.
+import type { Database } from "./generated/Database";
+import type { LanguagePreference } from "./generated/LanguagePreference";
+import type { Notification } from "./generated/Notification";
+import type { PvService } from "./generated/PvService";
+import type { SongType } from "./generated/SongType";
 
-export const requestLanguages = ["Default", "Japanese", "Romaji", "English"] as const;
-export type RequestLanguage = (typeof requestLanguages)[number];
+export type { Account } from "./generated/Account";
+export type { Database } from "./generated/Database";
+export type { ErrorResponse } from "./generated/ErrorResponse";
+export type { LoginRequest } from "./generated/LoginRequest";
+export type { NotificationsResponse } from "./generated/NotificationsResponse";
+export type { PV } from "./generated/PV";
+export type { PvService } from "./generated/PvService";
+export type { PvType } from "./generated/PvType";
+export type { SongNotificationType } from "./generated/SongNotificationType";
+export type { SongType } from "./generated/SongType";
+export type { Tag } from "./generated/Tag";
+export type { UserForApiContract } from "./generated/UserForApiContract";
 
-export interface AuthenticationPayload {
-  username: string;
-  password: string;
-  database: Database;
+export type RequestLanguage = LanguagePreference;
+export type VocaDbNotification = Notification;
+export type NotificationType = Notification["notificationType"];
+export type SongNotification = Extract<Notification, { notificationType: "SongNotification" }>;
+
+/** Lists every member of a string union; fails to compile when one is missing. */
+function allOf<T extends string>() {
+  return <const A extends readonly T[]>(
+    values: A & ([Exclude<T, A[number]>] extends [never] ? unknown : never)
+  ): A => values;
 }
 
-export interface AccessToken {
-  token: string;
-}
-
-export interface MainPicture {
-  urlSmallThumb: string | null;
-  urlThumb: string | null;
-  urlTinyThumb: string | null;
-}
-
-export interface AccountData {
-  id: number;
-  name: string;
-  active: boolean;
-  memberSince: string;
-  verifiedArtist: boolean;
-  groupId: string;
-  mainPicture: MainPicture | null;
-}
-
-export type NotificationType =
-  | "AlbumNotification"
-  | "ArtistNotification"
-  | "EventNotification"
-  | "ReportNotification"
-  | "SongNotification"
-  | "UnknownNotification";
-
-export type SongNotificationType = "New" | "Tagged";
-export type PvType = "Original" | "Reprint" | "Other";
-
-export const songTypes = [
+export const databases = allOf<Database>()(["VocaDb", "TouhouDb", "UtaiteDb"]);
+export const requestLanguages = allOf<RequestLanguage>()([
+  "Default",
+  "Japanese",
+  "Romaji",
+  "English"
+]);
+export const songTypes = allOf<SongType>()([
   "Unspecified",
   "Original",
   "Remaster",
@@ -55,10 +51,8 @@ export const songTypes = [
   "Live",
   "Illustration",
   "Other"
-] as const;
-export type SongType = (typeof songTypes)[number];
-
-export const pvServices = [
+]);
+export const pvServices = allOf<PvService>()([
   "NicoNicoDouga",
   "Youtube",
   "SoundCloud",
@@ -69,67 +63,7 @@ export const pvServices = [
   "LocalFile",
   "Creofuga",
   "Bandcamp"
-] as const;
-export type PvService = (typeof pvServices)[number];
-
-export interface PV {
-  id: number;
-  pvType: PvType;
-  service: PvService;
-  url: string;
-  name: string;
-  disabled: boolean;
-  author: string | null;
-  publishDate: string | null;
-  pvId: string | null;
-  thumbUrl: string | null;
-  timestamp: string | null;
-}
-
-export interface Tag {
-  id: number;
-  name: string;
-  count: number;
-  categoryName: string | null;
-}
-
-interface BaseNotification<T extends NotificationType> {
-  notificationType: T;
-  id: number;
-  originalSubject: string;
-  originalBody: string;
-  created_date: string;
-}
-
-export interface SongNotification extends BaseNotification<"SongNotification"> {
-  type: SongNotificationType;
-  songId: number;
-  songType: SongType;
-  title: string;
-  artist: string;
-  tags: Tag[];
-  pvs: PV[];
-  releaseDate: string | null;
-}
-
-export type AlbumNotification = BaseNotification<"AlbumNotification">;
-export type ArtistNotification = BaseNotification<"ArtistNotification">;
-export type EventNotification = BaseNotification<"EventNotification">;
-export type ReportNotification = BaseNotification<"ReportNotification">;
-export type UnknownNotification = BaseNotification<"UnknownNotification">;
-
-export type VocaDbNotification =
-  | SongNotification
-  | AlbumNotification
-  | ArtistNotification
-  | EventNotification
-  | ReportNotification
-  | UnknownNotification;
-
-export interface NotificationsResponse {
-  totalCount: number;
-  notifications: VocaDbNotification[];
-}
+]);
 
 export function isSongNotification(n: VocaDbNotification): n is SongNotification {
   return n.notificationType === "SongNotification";

@@ -6,51 +6,45 @@ import { api } from "@/api";
 import { useAccountStore } from "@/stores/account";
 import { useSettingsStore } from "@/stores/settings";
 
+import { account } from "./fixtures";
+
 vi.mock("@/api", () => ({
   api: {
-    authenticate: vi.fn(),
-    accountData: vi.fn(),
-    logout: vi.fn()
+    login: vi.fn(),
+    logout: vi.fn(),
+    me: vi.fn()
   }
 }));
 
-const account = {
-  id: 1,
-  name: "miku",
-  active: true,
-  memberSince: "2020-01-01",
-  verifiedArtist: false,
-  groupId: "Regular",
-  mainPicture: null
-};
-
 describe("account store", () => {
-  beforeEach(() => setActivePinia(createPinia()));
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.clearAllMocks();
+  });
 
-  it("logs in and persists the session", async () => {
-    vi.mocked(api.authenticate).mockResolvedValue({ token: "token" });
-    vi.mocked(api.accountData).mockResolvedValue(account);
+  it("logs in and remembers the account", async () => {
+    const touhou = account({ database: "TouhouDb" });
+    vi.mocked(api.login).mockResolvedValue(touhou);
 
     const store = useAccountStore();
     expect(store.isAuthenticated).toBe(false);
 
     await store.login({ username: "miku", password: "pw", database: "TouhouDb" });
+    await nextTick();
 
     expect(store.isAuthenticated).toBe(true);
-    expect(store.token).toBe("token");
+    expect(store.account).toEqual(touhou);
     expect(store.database).toBe("TouhouDb");
-    expect(store.accountData).toEqual(account);
-    expect(localStorage.getItem("account.token")).toBe("token");
 
     setActivePinia(createPinia());
     const restored = useAccountStore();
     expect(restored.isAuthenticated).toBe(true);
-    expect(restored.database).toBe("TouhouDb");
-    expect(restored.accountData).toEqual(account);
+    expect(restored.account).toEqual(touhou);
+    expect(restored.lastDatabase).toBe("TouhouDb");
   });
 
   it("stays logged out when login fails", async () => {
-    vi.mocked(api.authenticate).mockRejectedValue(new Error("401"));
+    vi.mocked(api.login).mockRejectedValue(new Error("401"));
 
     const store = useAccountStore();
     await expect(
@@ -59,48 +53,44 @@ describe("account store", () => {
     expect(store.isAuthenticated).toBe(false);
   });
 
-  it("logs out", async () => {
-    vi.mocked(api.authenticate).mockResolvedValue({ token: "token" });
-    vi.mocked(api.accountData).mockResolvedValue(account);
-
+  it("refreshes the account", async () => {
+    vi.mocked(api.me).mockResolvedValue(account({ database: "UtaiteDb" }));
     const store = useAccountStore();
-    await store.login({ username: "miku", password: "pw", database: "VocaDb" });
-    store.logout();
-    await nextTick();
+    store.account = account();
 
-    expect(store.isAuthenticated).toBe(false);
-    expect(store.accountData).toBeNull();
-    expect(localStorage.getItem("account.token")).toBeNull();
+    await store.refresh();
+
+    expect(store.database).toBe("UtaiteDb");
   });
-});
 
-describe("account sign out", () => {
-  beforeEach(() => setActivePinia(createPinia()));
-
-  it("terminates the backend session", async () => {
+  it("terminates the backend session on sign out", async () => {
     vi.mocked(api.logout).mockResolvedValue();
     const store = useAccountStore();
-    store.token = "token";
+    store.account = account();
 
     await store.signOut();
+    await nextTick();
 
     expect(api.logout).toHaveBeenCalledOnce();
     expect(store.isAuthenticated).toBe(false);
+    expect(localStorage.getItem("account")).toBeNull();
   });
 
   it("forgets the session even if the backend fails", async () => {
     vi.mocked(api.logout).mockRejectedValue(new Error("Network Error"));
     const store = useAccountStore();
-    store.token = "token";
+    store.account = account();
 
     await store.signOut();
 
     expect(store.isAuthenticated).toBe(false);
   });
 
-  it("does not call the backend without a session", async () => {
-    await useAccountStore().signOut();
-    expect(api.logout).not.toHaveBeenCalled();
+  it("keeps the last database for the login page", () => {
+    const store = useAccountStore();
+    expect(store.database).toBe("VocaDb");
+    store.lastDatabase = "UtaiteDb";
+    expect(store.database).toBe("UtaiteDb");
   });
 });
 
