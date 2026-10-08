@@ -1,24 +1,9 @@
-### Project files ###
-Dockerfile
 target/
-!target/release/vocadb-notification-reader
+tests/
+Dockerfile
+.dockerignore
 
-### IntelliJ IDEA ###
 .idea/
-*.iws
-*.iml
-*.ipr
-
-### VS Code ###
 .vscode/
-.settings/
-.classpath
-.factorypath
-.project
-
-### log files ###
 *.log
-hs_err_pid*
-
-### Mac OS ###
 .DS_Store

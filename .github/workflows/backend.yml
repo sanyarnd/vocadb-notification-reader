@@ -1,128 +1,98 @@
-name: Backend Build
+name: Backend
 
 on:
   workflow_dispatch:
   push:
+    branches: [master]
+    paths:
+      - .github/workflows/backend.yml
+      - backend/**
+  pull_request:
     paths:
       - .github/workflows/backend.yml
       - backend/**
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
-  RUSTFLAGS: "-Dwarnings"
-  REMOTE: handystuff.net
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+defaults:
+  run:
+    working-directory: backend
 
 jobs:
-  build:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    name: Build
-    defaults:
-      run:
-        working-directory: backend
-
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-
-      - run: cargo build --release --all-features
-
-      - uses: redhat-actions/podman-login@v1
-        if: github.ref_name == 'master'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
         with:
-          registry: ghcr.io/${{ github.actor }}
+          workspaces: backend
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features --locked
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - run: cargo test --all-features --locked
+
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request' && github.ref_name == 'master'
+        with:
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: >
-          podman build
-          --file Dockerfile
-          --tag ghcr.io/${{ github.repository }}:latest
-          --tag ghcr.io/${{ github.repository }}:${{ github.sha }}
-          .
-        if: github.ref_name == 'master'
-      - run: |
-          podman push ghcr.io/${{ github.repository }}:latest
-          podman push ghcr.io/${{ github.repository }}:${{ github.sha }}
-        if: github.ref_name == 'master'
-
-      - uses: actions/delete-package-versions@v3
-        if: github.ref_name == 'master'
+      - id: meta
+        uses: docker/metadata-action@v5
         with:
-          package-name: ${{ github.event.repository.name }}
-          min-versions-to-keep: 3
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
 
-  deploy:
-    runs-on: ubuntu-latest
-    name: Deploy
-    needs: [ build ]
-    if: github.ref_name == 'master'
-
-    steps:
-      - name: Configure SSH
-        run: |
-          mkdir ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
-          echo "${{ secrets.DEPLOY_SSH_CONFIG }}" > ~/.ssh/config
-          echo "${{ secrets.DEPLOY_SSH_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 700 ~/.ssh && chmod 600 ~/.ssh/deploy_key
-
-      - run: |
-          ssh $REMOTE "docker pull ghcr.io/${{ github.repository }}:latest"
-          ssh $REMOTE "docker restart vocadb-notification-reader"
-
-#  test:
-#    name: Test Suite
-#    runs-on: ubuntu-latest
-#    defaults:
-#      run:
-#        working-directory: backend
-#
-#    steps:
-#      - uses: actions/checkout@v3
-#      - uses: dtolnay/rust-toolchain@stable
-#        with:
-#          toolchain: stable
-#      - run: cargo test
-
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: docker/build-push-action@v6
         with:
-          toolchain: stable
-      - run: cargo check
-
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      - run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      - run: cargo clippy --all-targets --all-features
+          context: backend
+          push: ${{ github.event_name != 'pull_request' && github.ref_name == 'master' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

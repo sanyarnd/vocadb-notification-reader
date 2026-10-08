@@ -1,6 +1,20 @@
-FROM ubuntu:22.04
-WORKDIR /app
+FROM rust:1.90-slim-bookworm AS builder
+WORKDIR /build
 
-COPY /target/release/vocadb-notification-reader .
+# Cache dependencies separately from the application sources.
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src \
+    && echo 'fn main() {}' > src/main.rs \
+    && touch src/lib.rs \
+    && cargo build --release --locked \
+    && rm -rf src
 
-ENTRYPOINT ["/app/vocadb-notification-reader"]
+COPY src ./src
+RUN touch src/main.rs src/lib.rs && cargo build --release --locked
+
+FROM gcr.io/distroless/cc-debian12:nonroot
+COPY --from=builder /build/target/release/vocadb-notification-reader /usr/local/bin/vocadb-notification-reader
+
+ENV LISTEN_ADDR=0.0.0.0:8080
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/vocadb-notification-reader"]
