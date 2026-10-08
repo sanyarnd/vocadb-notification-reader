@@ -9,8 +9,10 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use strum::AsRefStr;
+use ts_rs::TS;
 
-#[derive(Serialize, Deserialize, AsRefStr, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, AsRefStr, Clone, Copy, PartialEq, Eq, Debug, TS)]
+#[ts(export)]
 pub enum LanguagePreference {
     Default,
     Japanese,
@@ -41,7 +43,8 @@ pub struct PartialFindResult<T> {
     pub total_count: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct UserForApiContract {
     pub id: i32,
@@ -53,7 +56,8 @@ pub struct UserForApiContract {
     pub main_picture: Option<EntryThumbForApiContract>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, TS)]
+#[ts(export)]
 #[serde(rename_all = "camelCase")]
 pub struct EntryThumbForApiContract {
     pub mime: Option<String>,
@@ -106,7 +110,8 @@ pub struct SongForApiContract {
     pub tags: Vec<TagUsageForApiContract>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, TS)]
+#[ts(export)]
 pub enum SongType {
     Unspecified,
     Original,
@@ -182,7 +187,8 @@ where
     }))
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, AsRefStr, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, AsRefStr, Debug, TS)]
+#[ts(export)]
 pub enum PvService {
     NicoNicoDouga,
     Youtube,
@@ -196,7 +202,8 @@ pub enum PvService {
     Bandcamp,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, AsRefStr, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, AsRefStr, Debug, TS)]
+#[ts(export)]
 pub enum PvType {
     Original,
     Reprint,

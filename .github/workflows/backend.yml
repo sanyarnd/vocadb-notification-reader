@@ -61,6 +61,13 @@ jobs:
         with:
           workspaces: backend
       - run: cargo test --all-features --locked
+      - name: Check that TypeScript bindings are up to date
+        run: |
+          git add --intent-to-add ../frontend/src/api/generated
+          git diff --exit-code -- ../frontend/src/api/generated || {
+            echo "::error::API types changed, run 'cargo test' in backend/ and commit frontend/src/api/generated"
+            exit 1
+          }
 
   image:
     name: Container image

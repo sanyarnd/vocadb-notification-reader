@@ -1,4 +1,4 @@
-import type { PV, SongNotification, VocaDbNotification } from "@/api/dto";
+import type { Account, PV, SongNotification, VocaDbNotification } from "@/api/dto";
 
 export function pv(overrides: Partial<PV> = {}): PV {
   return {
@@ -23,7 +23,7 @@ export function songNotification(overrides: Partial<SongNotification> = {}): Son
     id: 1,
     originalSubject: "New song tagged with rock",
     originalBody: "[Melt](https://vocadb.net/S/100)",
-    created_date: "2022-02-25T14:29:00Z",
+    createdDate: "2022-02-25T14:29:00Z",
     type: "Tagged",
     songId: 100,
     songType: "Original",
@@ -42,6 +42,22 @@ export function artistNotification(id: number, body: string): VocaDbNotification
     id,
     originalSubject: "New artist",
     originalBody: body,
-    created_date: "2022-02-25T14:29:00Z"
+    createdDate: "2022-02-25T14:29:00Z"
+  };
+}
+
+export function account(overrides: Partial<Account> = {}): Account {
+  return {
+    database: "VocaDb",
+    user: {
+      id: 1,
+      name: "miku",
+      active: true,
+      memberSince: "2020-01-01",
+      verifiedArtist: false,
+      groupId: "Regular",
+      mainPicture: null
+    },
+    ...overrides
   };
 }

@@ -1,5 +1,4 @@
 import { createApi, createHttpClient } from "@/api/client";
-import { useAccountStore } from "@/stores/account";
 
 let onUnauthorized: () => void = () => {};
 
@@ -11,7 +10,6 @@ export function setUnauthorizedHandler(handler: () => void): void {
 export const api = createApi(
   createHttpClient({
     baseURL: import.meta.env.VITE_API_URL ?? "",
-    getToken: () => useAccountStore().token,
     onUnauthorized: () => onUnauthorized()
   })
 );

@@ -5,18 +5,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use axum::extract::{FromRequest, FromRequestParts, State};
+use axum::extract::{FromRequest, FromRequestParts, Query, Request, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderValue, Method, header};
-use axum::routing::{get, post};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
+use axum::routing::get;
 use axum::{Json, Router};
-use axum_extra::TypedHeader;
-use axum_extra::headers::Authorization;
-use axum_extra::headers::authorization::Bearer;
+use axum_extra::extract::CookieJar;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use futures::{StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use ts_rs::TS;
 
 use crate::cache::Cache;
 use crate::client::models::{LanguagePreference, UserForApiContract};
@@ -31,9 +33,14 @@ use crate::session::{Session, SessionStore};
 pub type Result<T, E = AppError> = core::result::Result<T, E>;
 
 /// Maximum amount of notifications requested at once.
-pub const MAX_RESULTS: i32 = 100;
+pub const MAX_LIMIT: i32 = 100;
 /// Maximum amount of simultaneous requests to VocaDB per API call.
 const UPSTREAM_CONCURRENCY: usize = 8;
+
+/// Session cookie. The `__Host-` prefix pins it to the API host over HTTPS.
+pub const SESSION_COOKIE: &str = "__Host-session";
+/// Browsers cap cookie lifetime at 400 days; the cookie is re-issued on every `GET /api/me`.
+const SESSION_COOKIE_MAX_AGE: Duration = Duration::from_secs(400 * 24 * 60 * 60);
 
 #[derive(Clone)]
 pub struct AppState {
@@ -45,10 +52,15 @@ struct Inner {
     sessions: SessionStore,
     cache: Cache,
     database_urls: HashMap<Database, String>,
+    allowed_origins: Vec<String>,
 }
 
 impl AppState {
-    pub fn new(kv: Kv, database_urls: HashMap<Database, String>) -> anyhow::Result<Self> {
+    pub fn new(
+        kv: Kv,
+        database_urls: HashMap<Database, String>,
+        allowed_origins: Vec<String>,
+    ) -> anyhow::Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
@@ -66,6 +78,7 @@ impl AppState {
                 sessions: SessionStore::new(kv.clone()),
                 cache: Cache::new(kv),
                 database_urls,
+                allowed_origins,
             }),
         })
     }
@@ -87,11 +100,13 @@ impl AppState {
 
 pub fn router(state: AppState) -> Router {
     let api = Router::new()
-        .route("/login", post(login))
-        .route("/logout", post(logout))
-        .route("/users/current", post(current_user))
-        .route("/notifications/fetch", post(fetch_notifications))
-        .route("/notifications/delete", post(delete_notifications));
+        .route("/session", axum::routing::post(login).delete(logout))
+        .route("/me", get(me))
+        .route(
+            "/notifications",
+            get(fetch_notifications).delete(delete_notifications),
+        )
+        .route_layer(middleware::from_fn_with_state(state.clone(), check_origin));
 
     Router::new()
         .route("/health", get(|| async { "OK" }))
@@ -107,7 +122,11 @@ pub async fn app(config: Config) -> anyhow::Result<Router> {
             Kv::memory()
         }
     };
-    let state = AppState::new(kv, config.database_urls)?;
+    let state = AppState::new(
+        kv,
+        config.database_urls,
+        config.cors_allowed_origins.clone(),
+    )?;
     let mut app = router(state).layer(TraceLayer::new_for_http());
 
     if !config.cors_allowed_origins.is_empty() {
@@ -120,9 +139,8 @@ pub async fn app(config: Config) -> anyhow::Result<Router> {
         app = app.layer(
             CorsLayer::new()
                 .allow_origin(origins)
-                .allow_methods([Method::POST])
-                .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
-                // The API may sit behind an authenticating proxy relying on cookies.
+                .allow_methods([Method::GET, Method::POST, Method::DELETE])
+                .allow_headers([header::CONTENT_TYPE])
                 .allow_credentials(true),
         );
     }
@@ -130,12 +148,50 @@ pub async fn app(config: Config) -> anyhow::Result<Router> {
     Ok(app)
 }
 
+/// CSRF protection: state changing requests from browsers must come from the API's own
+/// origin or one of the allowed origins. `SameSite` alone doesn't cover sibling subdomains.
+async fn check_origin(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    if matches!(
+        *request.method(),
+        Method::GET | Method::HEAD | Method::OPTIONS
+    ) {
+        return next.run(request).await;
+    }
+
+    let headers = request.headers();
+    let Some(origin) = headers.get(header::ORIGIN) else {
+        // Browsers always send Origin with such requests; other clients aren't a CSRF vector.
+        return next.run(request).await;
+    };
+    let origin = origin.to_str().unwrap_or_default();
+    let host = headers
+        .get(header::HOST)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or_default();
+
+    let same_origin = origin
+        .split_once("://")
+        .is_some_and(|(_, authority)| !host.is_empty() && authority == host);
+    let allowed = state.inner.allowed_origins.iter().any(|o| o == origin);
+
+    if same_origin || allowed {
+        next.run(request).await
+    } else {
+        AppError::Forbidden(format!("Requests from {origin} are not allowed")).into_response()
+    }
+}
+
 /// JSON extractor that reports malformed payloads with [`AppError`].
 #[derive(FromRequest)]
 #[from_request(via(Json), rejection(AppError))]
 pub struct AppJson<T>(pub T);
 
-/// Session referenced by the bearer token.
+/// Query extractor that reports malformed parameters with [`AppError`].
+#[derive(FromRequestParts)]
+#[from_request(via(Query), rejection(AppError))]
+pub struct AppQuery<T>(pub T);
+
+/// Session referenced by the session cookie.
 pub struct Authenticated {
     pub id: String,
     pub session: Session,
@@ -145,18 +201,17 @@ impl FromRequestParts<AppState> for Authenticated {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self> {
-        let TypedHeader(Authorization(bearer)) =
-            TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
-                .await
-                .map_err(|e| AppError::Unauthorized(e.to_string()))?;
-
-        let id = bearer.token().to_string();
+        let jar = CookieJar::from_headers(&parts.headers);
+        let id = jar
+            .get(SESSION_COOKIE)
+            .map(|c| c.value().to_string())
+            .ok_or_else(|| AppError::Unauthorized("Not signed in".to_string()))?;
         let session = state
             .inner
             .sessions
             .get(&id)
             .await?
-            .ok_or_else(|| AppError::Unauthorized("Session has expired".to_string()))?;
+            .ok_or_else(|| AppError::Unauthorized("Session has ended".to_string()))?;
 
         Ok(Authenticated { id, session })
     }
@@ -190,42 +245,68 @@ impl Authenticated {
     }
 }
 
-#[derive(Deserialize, Debug)]
+fn session_cookie(id: String) -> Cookie<'static> {
+    Cookie::build((SESSION_COOKIE, id))
+        .path("/")
+        .secure(true)
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .max_age(
+            SESSION_COOKIE_MAX_AGE
+                .try_into()
+                .expect("max age must fit into cookie duration"),
+        )
+        .build()
+}
+
+fn removed_session_cookie() -> Cookie<'static> {
+    let mut cookie = session_cookie(String::new());
+    cookie.make_removal();
+    cookie
+}
+
+#[derive(Deserialize, TS, Debug)]
+#[ts(export)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
     pub database: Database,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct LoginResponse {
-    pub token: String,
+#[derive(Serialize, TS, Debug)]
+#[ts(export)]
+pub struct Account {
+    pub database: Database,
+    pub user: UserForApiContract,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationsFetchRequest {
-    pub start_offset: i32,
-    pub max_results: i32,
+#[derive(Deserialize, TS, Debug)]
+#[ts(export)]
+pub struct NotificationsQuery {
+    pub offset: i32,
+    pub limit: i32,
     pub language: LanguagePreference,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, TS, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct NotificationsFetchResponse {
+#[ts(export)]
+pub struct NotificationsResponse {
     pub notifications: Vec<Notification>,
     pub total_count: i32,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct NotificationsDeleteRequest {
+#[derive(Deserialize, TS, Debug)]
+#[ts(export)]
+pub struct DeleteNotificationsRequest {
     pub ids: Vec<i32>,
 }
 
 async fn login(
     State(state): State<AppState>,
+    jar: CookieJar,
     AppJson(payload): AppJson<LoginRequest>,
-) -> Result<Json<LoginResponse>> {
+) -> Result<(CookieJar, Json<Account>)> {
     let client = state.client(payload.database, None)?;
     client.login(&payload.username, &payload.password).await?;
     let user = client.current_user().await?;
@@ -236,33 +317,50 @@ async fn login(
         cookies: client.cookies(),
         expires_at: client.expires_at(),
     };
-    let token = state.inner.sessions.create(&session).await?;
+    let id = state.inner.sessions.create(&session).await?;
 
-    Ok(Json(LoginResponse { token }))
+    Ok((
+        jar.add(session_cookie(id)),
+        Json(Account {
+            database: payload.database,
+            user,
+        }),
+    ))
 }
 
-async fn logout(State(state): State<AppState>, auth: Authenticated) -> Result<Json<()>> {
-    state.inner.sessions.delete(&auth.id).await?;
-    Ok(Json(()))
+async fn logout(State(state): State<AppState>, jar: CookieJar) -> Result<(CookieJar, Json<()>)> {
+    if let Some(cookie) = jar.get(SESSION_COOKIE) {
+        state.inner.sessions.delete(cookie.value()).await?;
+    }
+    Ok((jar.add(removed_session_cookie()), Json(())))
 }
 
-async fn current_user(
+async fn me(
     State(state): State<AppState>,
+    jar: CookieJar,
     auth: Authenticated,
-) -> Result<Json<UserForApiContract>> {
+) -> Result<(CookieJar, Json<Account>)> {
     let client = auth.client(&state)?;
     let result = client.current_user().await.map_err(AppError::from);
-    Ok(Json(auth.sync(&state, &client, result).await?))
+    let user = auth.sync(&state, &client, result).await?;
+
+    Ok((
+        jar.add(session_cookie(auth.id)),
+        Json(Account {
+            database: auth.session.database,
+            user,
+        }),
+    ))
 }
 
 async fn fetch_notifications(
     State(state): State<AppState>,
     auth: Authenticated,
-    AppJson(payload): AppJson<NotificationsFetchRequest>,
-) -> Result<Json<NotificationsFetchResponse>> {
-    if payload.start_offset < 0 || !(0..=MAX_RESULTS).contains(&payload.max_results) {
+    AppQuery(query): AppQuery<NotificationsQuery>,
+) -> Result<Json<NotificationsResponse>> {
+    if query.offset < 0 || !(0..=MAX_LIMIT).contains(&query.limit) {
         return Err(AppError::ConstraintViolation(format!(
-            "startOffset must be non-negative and maxResults must be within [0, {MAX_RESULTS}]"
+            "offset must be non-negative and limit must be within [0, {MAX_LIMIT}]"
         )));
     }
 
@@ -275,16 +373,16 @@ async fn fetch_notifications(
     };
     let result = async {
         let messages = client
-            .get_messages(source.user_id, payload.start_offset, payload.max_results)
+            .get_messages(source.user_id, query.offset, query.limit)
             .await?;
 
         let notifications = futures::stream::iter(messages.items)
-            .map(|message| load_notification_details(&source, payload.language, message.id))
+            .map(|message| load_notification_details(&source, query.language, message.id))
             .buffered(UPSTREAM_CONCURRENCY)
             .try_collect()
             .await?;
 
-        Ok(NotificationsFetchResponse {
+        Ok(NotificationsResponse {
             notifications,
             total_count: messages.total_count,
         })
@@ -297,7 +395,7 @@ async fn fetch_notifications(
 async fn delete_notifications(
     State(state): State<AppState>,
     auth: Authenticated,
-    AppJson(payload): AppJson<NotificationsDeleteRequest>,
+    AppJson(payload): AppJson<DeleteNotificationsRequest>,
 ) -> Result<Json<()>> {
     if payload.ids.is_empty() {
         return Ok(Json(()));

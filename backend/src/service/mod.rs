@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::cache::{Cache, MESSAGE_TTL, SONG_TTL};
 use crate::client::models::{LanguagePreference, SongForApiContract, UserMessageContract};
@@ -14,7 +15,8 @@ use crate::service::dto::{
     BaseNotification, Notification, PV, SongNotification, SongNotificationType, Tag,
 };
 
-#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash, Debug, TS)]
+#[ts(export)]
 #[allow(clippy::enum_variant_names)]
 pub enum Database {
     VocaDb,

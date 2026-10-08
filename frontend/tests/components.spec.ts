@@ -10,13 +10,12 @@ import { useAccountStore } from "@/stores/account";
 import { useSettingsStore } from "@/stores/settings";
 import LoginView from "@/views/LoginView.vue";
 
-import { artistNotification, pv, songNotification } from "./fixtures";
+import { account, artistNotification, pv, songNotification } from "./fixtures";
 import { mountWithPlugins } from "./mount";
 
 vi.mock("@/api", () => ({
   api: {
-    authenticate: vi.fn(),
-    accountData: vi.fn(),
+    login: vi.fn(),
     notifications: vi.fn(),
     deleteNotifications: vi.fn()
   }
@@ -41,16 +40,7 @@ async function fillLoginForm(wrapper: ReturnType<typeof mountWithPlugins>["wrapp
 
 describe("LoginView", () => {
   it("logs in and navigates home", async () => {
-    vi.mocked(api.authenticate).mockResolvedValue({ token: "token" });
-    vi.mocked(api.accountData).mockResolvedValue({
-      id: 1,
-      name: "miku",
-      active: true,
-      memberSince: "",
-      verifiedArtist: false,
-      groupId: "Regular",
-      mainPicture: null
-    });
+    vi.mocked(api.login).mockResolvedValue(account());
     const { wrapper, router } = mountWithPlugins(LoginView);
     const push = vi.spyOn(router, "push");
 
@@ -59,7 +49,7 @@ describe("LoginView", () => {
     await wrapper.find("form").trigger("submit");
     await flushPromises();
 
-    expect(api.authenticate).toHaveBeenCalledWith({
+    expect(api.login).toHaveBeenCalledWith({
       username: "miku",
       password: "secret",
       database: "VocaDb"
@@ -70,7 +60,7 @@ describe("LoginView", () => {
   });
 
   it("shows an error for bad credentials", async () => {
-    vi.mocked(api.authenticate).mockRejectedValue(unauthorized());
+    vi.mocked(api.login).mockRejectedValue(unauthorized());
     const { wrapper } = mountWithPlugins(LoginView);
 
     await fillLoginForm(wrapper);
@@ -83,7 +73,7 @@ describe("LoginView", () => {
   });
 
   it("shows a connection error otherwise", async () => {
-    vi.mocked(api.authenticate).mockRejectedValue(new Error("Network Error"));
+    vi.mocked(api.login).mockRejectedValue(new Error("Network Error"));
     const { wrapper } = mountWithPlugins(LoginView);
 
     await fillLoginForm(wrapper);
@@ -101,7 +91,7 @@ describe("LoginView", () => {
     await wrapper.find("form").trigger("submit");
     await flushPromises();
 
-    expect(api.authenticate).not.toHaveBeenCalled();
+    expect(api.login).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });
@@ -215,7 +205,7 @@ describe("SongNotificationPopup", () => {
     });
     const { wrapper } = mountWithPlugins(SongNotificationPopup, { props: { notification: null } });
     useSettingsStore().preferredPvService = "Youtube";
-    useAccountStore().database = "TouhouDb";
+    useAccountStore().account = account({ database: "TouhouDb" });
 
     await wrapper.setProps({ notification });
     await flushPromises();

@@ -1,24 +1,44 @@
 use axum::Router;
 use axum::body::Body;
-use axum::http::{Request, StatusCode, header};
+use axum::http::{Method, Request, StatusCode, header};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
+use vocadb_notification_reader::cache::{Cache, MESSAGE_TTL};
 use vocadb_notification_reader::kv::Kv;
 use vocadb_notification_reader::service::Database;
 use vocadb_notification_reader::session::{Session, SessionStore};
-use vocadb_notification_reader::web::{AppState, router};
+use vocadb_notification_reader::web::{AppState, SESSION_COOKIE, router};
 use wiremock::matchers::{body_string_contains, header as header_eq, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const USER_ID: i32 = 42;
-const SESSION_COOKIE: &str = ".AspNetCore.Cookies=session";
+const VOCADB_COOKIE: &str = ".AspNetCore.Cookies=session";
+const FRONTEND: &str = "https://foobar.com";
 
 struct TestApp {
     vocadb: MockServer,
     kv: Kv,
     sessions: SessionStore,
     router: Router,
+}
+
+struct Response {
+    status: StatusCode,
+    headers: axum::http::HeaderMap,
+    body: Value,
+}
+
+impl Response {
+    /// Value of the session cookie set by the response.
+    fn session_cookie(&self) -> Option<String> {
+        self.headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .find(|v| v.starts_with(&format!("{SESSION_COOKIE}=")))
+            .map(String::from)
+    }
 }
 
 impl TestApp {
@@ -30,42 +50,75 @@ impl TestApp {
             .into_iter()
             .map(|db| (db, vocadb.uri()))
             .collect();
-        let router = router(AppState::new(kv.clone(), urls).unwrap());
+        let state = AppState::new(kv.clone(), urls, vec![FRONTEND.to_string()]).unwrap();
 
         TestApp {
             vocadb,
             kv,
             sessions,
-            router,
+            router: router(state),
         }
     }
 
-    async fn token(&self) -> String {
+    async fn session(&self) -> String {
         let session = Session {
             user_id: USER_ID,
             database: Database::VocaDb,
-            cookies: vec![SESSION_COOKIE.to_string()],
+            cookies: vec![VOCADB_COOKIE.to_string()],
             expires_at: None,
         };
         self.sessions.create(&session).await.unwrap()
     }
 
-    async fn post(&self, uri: &str, token: Option<&str>, body: Value) -> (StatusCode, Value) {
-        let mut request = Request::post(uri).header(header::CONTENT_TYPE, "application/json");
-        if let Some(token) = token {
-            request = request.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    fn request(method: Method, uri: &str, session: Option<&str>) -> axum::http::request::Builder {
+        let mut request = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::HOST, "api.foobar.com")
+            .header(header::ORIGIN, FRONTEND);
+        if let Some(session) = session {
+            request = request.header(header::COOKIE, format!("{SESSION_COOKIE}={session}"));
         }
-        let request = request.body(Body::from(body.to_string())).unwrap();
-        self.send(request).await
+        request
     }
 
-    async fn send(&self, request: Request<Body>) -> (StatusCode, Value) {
+    async fn get(&self, uri: &str, session: Option<&str>) -> Response {
+        self.send(
+            Self::request(Method::GET, uri, session)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+    }
+
+    async fn json(
+        &self,
+        method: Method,
+        uri: &str,
+        session: Option<&str>,
+        body: Value,
+    ) -> Response {
+        self.send(
+            Self::request(method, uri, session)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+    }
+
+    async fn send(&self, request: Request<Body>) -> Response {
         let response = self.router.clone().oneshot(request).await.unwrap();
         let status = response.status();
+        let headers = response.headers().clone();
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         let body = serde_json::from_slice(&bytes)
             .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into()));
-        (status, body)
+        Response {
+            status,
+            headers,
+            body,
+        }
     }
 }
 
@@ -97,7 +150,7 @@ fn message_json(id: i32, subject: &str, body: &str) -> Value {
 async fn mock_current_user(server: &MockServer) {
     Mock::given(method("GET"))
         .and(path("/api/users/current"))
-        .and(header_eq("cookie", SESSION_COOKIE))
+        .and(header_eq("cookie", VOCADB_COOKIE))
         .respond_with(ResponseTemplate::new(200).set_body_json(user_json()))
         .mount(server)
         .await;
@@ -106,12 +159,15 @@ async fn mock_current_user(server: &MockServer) {
 #[tokio::test]
 async fn health() {
     let app = TestApp::new().await;
-    let request = Request::get("/health").body(Body::empty()).unwrap();
-    assert_eq!(app.send(request).await, (StatusCode::OK, json!("OK")));
+    let response = app.get("/health", None).await;
+    assert_eq!(
+        (response.status, response.body),
+        (StatusCode::OK, json!("OK"))
+    );
 }
 
 #[tokio::test]
-async fn login_returns_token_with_session_cookies() {
+async fn login_sets_session_cookie() {
     let app = TestApp::new().await;
     Mock::given(method("POST"))
         .and(path("/User/Login"))
@@ -124,7 +180,7 @@ async fn login_returns_token_with_session_cookies() {
                 .append_header(
                     "set-cookie",
                     format!(
-                        "{SESSION_COOKIE}; expires=Fri, 01 Jan 2100 00:00:00 GMT; path=/; httponly"
+                        "{VOCADB_COOKIE}; expires=Fri, 01 Jan 2100 00:00:00 GMT; path=/; httponly"
                     ),
                 ),
         )
@@ -133,30 +189,50 @@ async fn login_returns_token_with_session_cookies() {
         .await;
     mock_current_user(&app.vocadb).await;
 
-    let (status, body) = app
-        .post(
-            "/api/login",
+    let response = app
+        .json(
+            Method::POST,
+            "/api/session",
             None,
             json!({ "username": "miku", "password": "secret", "database": "UtaiteDb" }),
         )
         .await;
 
-    assert_eq!(status, StatusCode::OK, "{body}");
-    let session = app
-        .sessions
-        .get(body["token"].as_str().unwrap())
-        .await
-        .unwrap()
-        .expect("session must be stored");
+    assert_eq!(response.status, StatusCode::OK, "{}", response.body);
+    assert_eq!(response.body["database"], "UtaiteDb");
+    assert_eq!(response.body["user"]["name"], "miku");
+
+    let cookie = response
+        .session_cookie()
+        .expect("session cookie must be set");
+    for attribute in [
+        "HttpOnly",
+        "Secure",
+        "SameSite=Strict",
+        "Path=/",
+        "Max-Age=",
+    ] {
+        assert!(cookie.contains(attribute), "{cookie} lacks {attribute}");
+    }
+
+    let id = cookie
+        .split(';')
+        .next()
+        .and_then(|pair| pair.split_once('='))
+        .map(|(_, value)| value)
+        .unwrap();
+    let session = app.sessions.get(id).await.unwrap().expect("session stored");
     assert_eq!(
         session,
         Session {
             user_id: USER_ID,
             database: Database::UtaiteDb,
-            cookies: vec![SESSION_COOKIE.to_string()],
+            cookies: vec![VOCADB_COOKIE.to_string()],
             expires_at: "2100-01-01T00:00:00Z".parse().ok(),
         }
     );
+    // The token never appears in the body.
+    assert!(!response.body.to_string().contains(id));
 }
 
 #[tokio::test]
@@ -168,82 +244,178 @@ async fn login_with_bad_credentials_is_unauthorized() {
         .mount(&app.vocadb)
         .await;
 
-    let (status, body) = app
-        .post(
-            "/api/login",
+    let response = app
+        .json(
+            Method::POST,
+            "/api/session",
             None,
             json!({ "username": "miku", "password": "wrong", "database": "VocaDb" }),
         )
         .await;
 
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(body["code"], 401);
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(response.body["code"], 401);
+    assert_eq!(response.session_cookie(), None);
 }
 
 #[tokio::test]
-async fn malformed_payload_is_rejected() {
+async fn malformed_requests_are_rejected() {
     let app = TestApp::new().await;
+    let session = app.session().await;
 
-    let (status, body) = app
-        .post(
-            "/api/login",
+    let response = app
+        .json(
+            Method::POST,
+            "/api/session",
             None,
             json!({ "username": "miku", "database": "Nope" }),
         )
         .await;
+    assert!(response.status.is_client_error(), "{}", response.status);
+    assert_eq!(response.body["code"], response.status.as_u16());
 
-    assert!(status.is_client_error(), "{status}");
-    assert_eq!(body["code"], status.as_u16());
+    let response = app
+        .get("/api/notifications?offset=x&limit=1", Some(&session))
+        .await;
+    assert!(response.status.is_client_error(), "{}", response.status);
+    assert_eq!(response.body["code"], response.status.as_u16());
 }
 
 #[tokio::test]
-async fn protected_endpoints_require_valid_token() {
+async fn protected_endpoints_require_a_session() {
     let app = TestApp::new().await;
-    let deleted = app.token().await;
-    app.sessions.delete(&deleted).await.unwrap();
+    let ended = app.session().await;
+    app.sessions.delete(&ended).await.unwrap();
 
-    for token in [None, Some("garbage"), Some(deleted.as_str())] {
-        for uri in ["/api/users/current", "/api/notifications/delete"] {
-            let (status, _) = app.post(uri, token, json!({ "ids": [] })).await;
-            assert_eq!(status, StatusCode::UNAUTHORIZED, "{uri} with {token:?}");
-        }
+    for session in [None, Some("garbage"), Some(ended.as_str())] {
+        let response = app.get("/api/me", session).await;
+        assert_eq!(response.status, StatusCode::UNAUTHORIZED, "{session:?}");
+
+        let response = app
+            .json(
+                Method::DELETE,
+                "/api/notifications",
+                session,
+                json!({ "ids": [1] }),
+            )
+            .await;
+        assert_eq!(response.status, StatusCode::UNAUTHORIZED, "{session:?}");
     }
 }
 
 #[tokio::test]
-async fn current_user_is_proxied() {
+async fn me_returns_account_and_extends_cookie() {
     let app = TestApp::new().await;
     mock_current_user(&app.vocadb).await;
+    let session = app.session().await;
 
-    let (status, body) = app
-        .post("/api/users/current", Some(&app.token().await), json!({}))
-        .await;
+    let response = app.get("/api/me", Some(&session)).await;
 
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["id"], USER_ID);
-    assert_eq!(body["name"], "miku");
+    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(response.body["database"], "VocaDb");
+    assert_eq!(response.body["user"]["id"], USER_ID);
     assert_eq!(
-        body["mainPicture"]["urlThumb"],
+        response.body["user"]["mainPicture"]["urlThumb"],
         "https://example.com/thumb.png"
     );
+    let cookie = response.session_cookie().expect("cookie re-issued");
+    assert!(cookie.starts_with(&format!("{SESSION_COOKIE}={session};")));
 }
 
 #[tokio::test]
-async fn expired_upstream_session_ends_the_session() {
+async fn logout_ends_session_and_clears_cookie() {
+    let app = TestApp::new().await;
+    mock_current_user(&app.vocadb).await;
+    let session = app.session().await;
+
+    assert_eq!(
+        app.get("/api/me", Some(&session)).await.status,
+        StatusCode::OK
+    );
+
+    let response = app
+        .json(Method::DELETE, "/api/session", Some(&session), json!(null))
+        .await;
+    assert_eq!(response.status, StatusCode::OK);
+    let cookie = response.session_cookie().expect("cookie cleared");
+    assert!(cookie.contains("Max-Age=0"), "{cookie}");
+    assert_eq!(app.sessions.get(&session).await.unwrap(), None);
+
+    assert_eq!(
+        app.get("/api/me", Some(&session)).await.status,
+        StatusCode::UNAUTHORIZED
+    );
+
+    // Logging out without a session is a no-op.
+    let response = app
+        .json(Method::DELETE, "/api/session", None, json!(null))
+        .await;
+    assert_eq!(response.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn cross_site_requests_are_forbidden() {
+    let app = TestApp::new().await;
+    let session = app.session().await;
+
+    let request = |origin: &str, host: &str| {
+        Request::delete("/api/session")
+            .header(header::HOST, host)
+            .header(header::ORIGIN, origin)
+            .header(header::COOKIE, format!("{SESSION_COOKIE}={session}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+
+    // A sibling subdomain is same-site, but not an allowed origin.
+    let response = app
+        .send(request("https://evil.foobar.com", "api.foobar.com"))
+        .await;
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    assert!(app.sessions.get(&session).await.unwrap().is_some());
+
+    // Same origin requests are fine (e.g. the dev server proxy).
+    let response = app
+        .send(request("http://localhost:5173", "localhost:5173"))
+        .await;
+    assert_eq!(response.status, StatusCode::OK);
+    assert!(app.sessions.get(&session).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn reads_are_not_origin_checked() {
+    let app = TestApp::new().await;
+    mock_current_user(&app.vocadb).await;
+    let session = app.session().await;
+
+    let response = app
+        .send(
+            Request::get("/api/me")
+                .header(header::HOST, "api.foobar.com")
+                .header(header::ORIGIN, "https://other.example")
+                .header(header::COOKIE, format!("{SESSION_COOKIE}={session}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+    // CORS keeps other origins from reading the response.
+    assert_eq!(response.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn ended_upstream_session_ends_the_session() {
     let app = TestApp::new().await;
     Mock::given(method("GET"))
         .and(path("/api/users/current"))
         .respond_with(ResponseTemplate::new(401))
         .mount(&app.vocadb)
         .await;
-    let token = app.token().await;
+    let session = app.session().await;
 
-    let (status, _) = app
-        .post("/api/users/current", Some(&token), json!({}))
-        .await;
+    let response = app.get("/api/me", Some(&session)).await;
 
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(app.sessions.get(&token).await.unwrap(), None);
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(app.sessions.get(&session).await.unwrap(), None);
 }
 
 #[tokio::test]
@@ -257,14 +429,12 @@ async fn redirect_to_login_ends_the_session() {
         )
         .mount(&app.vocadb)
         .await;
-    let token = app.token().await;
+    let session = app.session().await;
 
-    let (status, _) = app
-        .post("/api/users/current", Some(&token), json!({}))
-        .await;
+    let response = app.get("/api/me", Some(&session)).await;
 
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert_eq!(app.sessions.get(&token).await.unwrap(), None);
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(app.sessions.get(&session).await.unwrap(), None);
 }
 
 #[tokio::test]
@@ -272,7 +442,7 @@ async fn refreshed_upstream_cookies_are_saved() {
     let app = TestApp::new().await;
     Mock::given(method("GET"))
         .and(path("/api/users/current"))
-        .and(header_eq("cookie", SESSION_COOKIE))
+        .and(header_eq("cookie", VOCADB_COOKIE))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(user_json())
@@ -291,18 +461,18 @@ async fn refreshed_upstream_cookies_are_saved() {
         .expect(1)
         .mount(&app.vocadb)
         .await;
-    let token = app.token().await;
+    let session = app.session().await;
 
     for _ in 0..2 {
-        let (status, _) = app
-            .post("/api/users/current", Some(&token), json!({}))
-            .await;
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            app.get("/api/me", Some(&session)).await.status,
+            StatusCode::OK
+        );
     }
 
-    let session = app.sessions.get(&token).await.unwrap().unwrap();
-    assert_eq!(session.cookies, [".AspNetCore.Cookies=refreshed"]);
-    assert_eq!(session.expires_at, "2100-01-01T00:00:00Z".parse().ok());
+    let stored = app.sessions.get(&session).await.unwrap().unwrap();
+    assert_eq!(stored.cookies, [".AspNetCore.Cookies=refreshed"]);
+    assert_eq!(stored.expires_at, "2100-01-01T00:00:00Z".parse().ok());
 }
 
 #[tokio::test]
@@ -313,13 +483,14 @@ async fn upstream_failure_is_bad_gateway() {
         .respond_with(ResponseTemplate::new(500))
         .mount(&app.vocadb)
         .await;
+    let session = app.session().await;
 
-    let (status, body) = app
-        .post("/api/users/current", Some(&app.token().await), json!({}))
-        .await;
+    let response = app.get("/api/me", Some(&session)).await;
 
-    assert_eq!(status, StatusCode::BAD_GATEWAY);
-    assert_eq!(body["code"], 502);
+    assert_eq!(response.status, StatusCode::BAD_GATEWAY);
+    assert_eq!(response.body["code"], 502);
+    // A failing VocaDB doesn't end the session.
+    assert!(app.sessions.get(&session).await.unwrap().is_some());
 }
 
 #[tokio::test]
@@ -332,7 +503,7 @@ async fn fetch_notifications() {
         .and(query_param("inbox", "Notifications"))
         .and(query_param("start", "10"))
         .and(query_param("maxResults", "3"))
-        .and(header_eq("cookie", SESSION_COOKIE))
+        .and(header_eq("cookie", VOCADB_COOKIE))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "items": [
                 message_json(1, "New song tagged", ""),
@@ -356,6 +527,7 @@ async fn fetch_notifications() {
         Mock::given(method("GET"))
             .and(path(format!("/api/users/messages/{id}")))
             .respond_with(ResponseTemplate::new(200).set_body_json(message_json(id, subject, body)))
+            .expect(1)
             .mount(server)
             .await;
     }
@@ -393,21 +565,17 @@ async fn fetch_notifications() {
         .mount(server)
         .await;
 
-    let token = app.token().await;
-    let fetch = || {
-        app.post(
-            "/api/notifications/fetch",
-            Some(&token),
-            json!({ "startOffset": 10, "maxResults": 3, "language": "Romaji" }),
-        )
-    };
-    let (status, body) = fetch().await;
-    assert_eq!(status, StatusCode::OK, "{body}");
+    let session = app.session().await;
+    let uri = "/api/notifications?offset=10&limit=3&language=Romaji";
+    let response = app.get(uri, Some(&session)).await;
+    assert_eq!(response.status, StatusCode::OK, "{}", response.body);
 
     // Messages and songs are served from the cache the second time.
-    let (status, cached) = fetch().await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(cached, body);
+    let cached = app.get(uri, Some(&session)).await;
+    assert_eq!(cached.status, StatusCode::OK);
+    assert_eq!(cached.body, response.body);
+
+    let body = response.body;
     assert_eq!(body["totalCount"], 13);
 
     let notifications = body["notifications"].as_array().unwrap();
@@ -418,7 +586,7 @@ async fn fetch_notifications() {
     assert_eq!(song["id"], 1);
     assert_eq!(song["originalSubject"], "New song tagged with Miku");
     assert_eq!(song["originalBody"], "Song: https://vocadb.net/S/100");
-    assert_eq!(song["created_date"], "2022-02-25T14:29:00Z");
+    assert_eq!(song["createdDate"], "2022-02-25T14:29:00Z");
     assert_eq!(song["type"], "Tagged");
     assert_eq!(song["songId"], 100);
     assert_eq!(song["songType"], "Original");
@@ -451,18 +619,17 @@ async fn fetch_notifications() {
 #[tokio::test]
 async fn fetch_notifications_validates_paging() {
     let app = TestApp::new().await;
-    let token = app.token().await;
+    let session = app.session().await;
 
-    for (start, max) in [(-1, 10), (0, -1), (0, 101)] {
-        let (status, body) = app
-            .post(
-                "/api/notifications/fetch",
-                Some(&token),
-                json!({ "startOffset": start, "maxResults": max, "language": "Default" }),
+    for (offset, limit) in [(-1, 10), (0, -1), (0, 101)] {
+        let response = app
+            .get(
+                &format!("/api/notifications?offset={offset}&limit={limit}&language=Default"),
+                Some(&session),
             )
             .await;
-        assert_eq!(status, StatusCode::BAD_REQUEST, "{start} {max}");
-        assert_eq!(body["code"], 400);
+        assert_eq!(response.status, StatusCode::BAD_REQUEST, "{offset} {limit}");
+        assert_eq!(response.body["code"], 400);
     }
 }
 
@@ -473,52 +640,33 @@ async fn delete_notifications() {
         .and(path(format!("/api/users/{USER_ID}/messages")))
         .and(query_param("messageId", "1"))
         .and(query_param("messageId", "2"))
-        .and(header_eq("cookie", SESSION_COOKIE))
+        .and(header_eq("cookie", VOCADB_COOKIE))
         .respond_with(ResponseTemplate::new(204))
         .expect(1)
         .mount(&app.vocadb)
         .await;
 
-    let (status, body) = app
-        .post(
-            "/api/notifications/delete",
-            Some(&app.token().await),
+    // Deleted messages are evicted from the cache.
+    let deleted = Cache::message_key(Database::VocaDb, USER_ID, 1);
+    let kept = Cache::message_key(Database::VocaDb, USER_ID, 3);
+    app.kv.set(&deleted, "{}", MESSAGE_TTL).await.unwrap();
+    app.kv.set(&kept, "{}", MESSAGE_TTL).await.unwrap();
+
+    let response = app
+        .json(
+            Method::DELETE,
+            "/api/notifications",
+            Some(&app.session().await),
             json!({ "ids": [1, 2] }),
         )
         .await;
 
-    assert_eq!((status, body), (StatusCode::OK, Value::Null));
-}
-
-#[tokio::test]
-async fn deleted_messages_are_evicted_from_cache() {
-    use vocadb_notification_reader::cache::{Cache, MESSAGE_TTL};
-
-    let app = TestApp::new().await;
-    Mock::given(method("DELETE"))
-        .and(path(format!("/api/users/{USER_ID}/messages")))
-        .respond_with(ResponseTemplate::new(204))
-        .mount(&app.vocadb)
-        .await;
-
-    // Seed the cache through the same store the app uses.
-    let kv = &app.kv;
-    let key = Cache::message_key(Database::VocaDb, USER_ID, 1);
-    kv.set(&key, "{}", MESSAGE_TTL).await.unwrap();
-    let other = Cache::message_key(Database::VocaDb, USER_ID, 2);
-    kv.set(&other, "{}", MESSAGE_TTL).await.unwrap();
-
-    let (status, _) = app
-        .post(
-            "/api/notifications/delete",
-            Some(&app.token().await),
-            json!({ "ids": [1] }),
-        )
-        .await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(kv.get(&key).await.unwrap(), None);
-    assert!(kv.get(&other).await.unwrap().is_some());
+    assert_eq!(
+        (response.status, response.body),
+        (StatusCode::OK, Value::Null)
+    );
+    assert_eq!(app.kv.get(&deleted).await.unwrap(), None);
+    assert!(app.kv.get(&kept).await.unwrap().is_some());
 }
 
 #[tokio::test]
@@ -529,35 +677,31 @@ async fn cors_preflight_allows_configured_origins() {
     let app = app(Config {
         listen_addr: "127.0.0.1:0".parse().unwrap(),
         redis_url: None,
-        cors_allowed_origins: vec!["https://reader.example.com".to_string()],
+        cors_allowed_origins: vec![FRONTEND.to_string()],
         database_urls: default_database_urls(),
     })
     .await
     .unwrap();
 
     let preflight = |origin: &str| {
-        Request::options("/api/notifications/fetch")
+        Request::options("/api/notifications")
             .header(header::ORIGIN, origin)
-            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
-            .header(
-                header::ACCESS_CONTROL_REQUEST_HEADERS,
-                "authorization,content-type",
-            )
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "DELETE")
+            .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "content-type")
             .body(Body::empty())
             .unwrap()
     };
 
-    let response = app
-        .clone()
-        .oneshot(preflight("https://reader.example.com"))
-        .await
-        .unwrap();
+    let response = app.clone().oneshot(preflight(FRONTEND)).await.unwrap();
     let headers = response.headers();
-    assert_eq!(
-        headers[header::ACCESS_CONTROL_ALLOW_ORIGIN],
-        "https://reader.example.com"
-    );
+    assert_eq!(headers[header::ACCESS_CONTROL_ALLOW_ORIGIN], FRONTEND);
     assert_eq!(headers[header::ACCESS_CONTROL_ALLOW_CREDENTIALS], "true");
+    assert!(
+        headers[header::ACCESS_CONTROL_ALLOW_METHODS]
+            .to_str()
+            .unwrap()
+            .contains("DELETE")
+    );
 
     let response = app
         .oneshot(preflight("https://evil.example.com"))
@@ -568,25 +712,4 @@ async fn cors_preflight_allows_configured_origins() {
             .headers()
             .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN)
     );
-}
-
-#[tokio::test]
-async fn logout_invalidates_session() {
-    let app = TestApp::new().await;
-    mock_current_user(&app.vocadb).await;
-    let token = app.token().await;
-
-    let (status, _) = app
-        .post("/api/users/current", Some(&token), json!({}))
-        .await;
-    assert_eq!(status, StatusCode::OK);
-
-    let (status, _) = app.post("/api/logout", Some(&token), json!({})).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(app.sessions.get(&token).await.unwrap(), None);
-
-    let (status, _) = app
-        .post("/api/users/current", Some(&token), json!({}))
-        .await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
 }

@@ -27,3 +27,9 @@ setUnauthorizedHandler(() => {
 });
 
 app.mount("#app");
+
+const account = useAccountStore(pinia);
+if (account.isAuthenticated) {
+  // Ended sessions are handled by the unauthorized handler, other failures are transient.
+  account.refresh().catch(() => {});
+}
