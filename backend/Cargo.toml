@@ -39,6 +39,7 @@ getrandom = "0.4"
 sha2 = "0.11"
 hex = "0.4"
 cookie = "0.18"
+ipnet = "2"
 ts-rs = { version = "12", features = ["chrono-impl", "no-serde-warnings"] }
 
 [dev-dependencies]

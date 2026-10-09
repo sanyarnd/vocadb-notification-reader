@@ -5,16 +5,19 @@ use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tower::ServiceExt;
 use vocadb_notification_reader::cache::{Cache, MESSAGE_TTL};
+use vocadb_notification_reader::config::DEFAULT_TRUSTED_PROXIES;
 use vocadb_notification_reader::kv::Kv;
 use vocadb_notification_reader::service::Database;
 use vocadb_notification_reader::session::{Session, SessionStore};
-use vocadb_notification_reader::web::{AppState, SESSION_COOKIE, router};
+use vocadb_notification_reader::web::{AppState, SESSION_COOKIE, WebSettings, router};
 use wiremock::matchers::{body_string_contains, header as header_eq, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const USER_ID: i32 = 42;
 const VOCADB_COOKIE: &str = ".AspNetCore.Cookies=session";
 const FRONTEND: &str = "https://foobar.com";
+/// Address of the client as forwarded by the reverse proxy.
+const CLIENT_IP: &str = "203.0.113.7";
 
 struct TestApp {
     vocadb: MockServer,
@@ -50,13 +53,26 @@ impl TestApp {
             .into_iter()
             .map(|db| (db, vocadb.uri()))
             .collect();
-        let state = AppState::new(kv.clone(), urls, vec![FRONTEND.to_string()]).unwrap();
+        let state = AppState::new(
+            kv.clone(),
+            WebSettings {
+                database_urls: urls,
+                allowed_origins: vec![FRONTEND.to_string()],
+                trusted_proxies: vocadb_notification_reader::client_ip::parse_networks(
+                    DEFAULT_TRUSTED_PROXIES,
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap();
 
+        // Requests arrive from a reverse proxy on the same host.
+        let proxy = std::net::SocketAddr::from(([127, 0, 0, 1], 40000));
         TestApp {
             vocadb,
             kv,
             sessions,
-            router: router(state),
+            router: router(state).layer(axum::extract::connect_info::MockConnectInfo(proxy)),
         }
     }
 
@@ -75,7 +91,8 @@ impl TestApp {
             .method(method)
             .uri(uri)
             .header(header::HOST, "api.foobar.com")
-            .header(header::ORIGIN, FRONTEND);
+            .header(header::ORIGIN, FRONTEND)
+            .header("x-forwarded-for", CLIENT_IP);
         if let Some(session) = session {
             request = request.header(header::COOKIE, format!("{SESSION_COOKIE}={session}"));
         }
@@ -678,6 +695,7 @@ async fn cors_preflight_allows_configured_origins() {
         listen_addr: "127.0.0.1:0".parse().unwrap(),
         redis_url: None,
         cors_allowed_origins: vec![FRONTEND.to_string()],
+        trusted_proxies: vec![],
         database_urls: default_database_urls(),
     })
     .await
@@ -712,4 +730,125 @@ async fn cors_preflight_allows_configured_origins() {
             .headers()
             .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN)
     );
+}
+
+fn login_request(username: &str, client_ip: &str) -> Request<Body> {
+    Request::post("/api/session")
+        .header(header::HOST, "api.foobar.com")
+        .header(header::ORIGIN, FRONTEND)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-forwarded-for", client_ip)
+        .body(Body::from(
+            json!({ "username": username, "password": "wrong", "database": "VocaDb" }).to_string(),
+        ))
+        .unwrap()
+}
+
+async fn mock_failing_login(server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(path("/User/Login"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("<html>login form</html>"))
+        .mount(server)
+        .await;
+}
+
+#[tokio::test]
+async fn login_attempts_are_limited_per_address() {
+    let app = TestApp::new().await;
+    mock_failing_login(&app.vocadb).await;
+
+    for attempt in 0..20 {
+        let response = app
+            .send(login_request(&format!("user{attempt}"), CLIENT_IP))
+            .await;
+        assert_eq!(
+            response.status,
+            StatusCode::UNAUTHORIZED,
+            "attempt {attempt}"
+        );
+    }
+
+    let response = app.send(login_request("another", CLIENT_IP)).await;
+    assert_eq!(response.status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.body["code"], 429);
+    let retry_after: u64 = response.headers[header::RETRY_AFTER]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!((1..=15 * 60).contains(&retry_after), "{retry_after}");
+
+    // Other clients are not affected.
+    let response = app.send(login_request("another", "198.51.100.1")).await;
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn login_attempts_are_limited_per_account() {
+    let app = TestApp::new().await;
+    mock_failing_login(&app.vocadb).await;
+
+    for attempt in 0..10 {
+        let response = app
+            .send(login_request("Miku", &format!("198.51.100.{attempt}")))
+            .await;
+        assert_eq!(
+            response.status,
+            StatusCode::UNAUTHORIZED,
+            "attempt {attempt}"
+        );
+    }
+
+    // The account is protected from distributed attempts, usernames are case-insensitive.
+    let response = app.send(login_request(" miku ", "198.51.100.200")).await;
+    assert_eq!(response.status, StatusCode::TOO_MANY_REQUESTS);
+
+    let response = app.send(login_request("rin", "198.51.100.200")).await;
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn requests_are_limited_per_session() {
+    let app = TestApp::new().await;
+    let session = app.session().await;
+    let other = app.session().await;
+
+    // Deleting nothing doesn't reach VocaDB, but still counts.
+    let delete = |session: &str| {
+        Request::delete("/api/notifications")
+            .header(header::HOST, "api.foobar.com")
+            .header(header::ORIGIN, FRONTEND)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::COOKIE, format!("{SESSION_COOKIE}={session}"))
+            .header("x-forwarded-for", CLIENT_IP)
+            .body(Body::from(json!({ "ids": [] }).to_string()))
+            .unwrap()
+    };
+
+    for _ in 0..120 {
+        assert_eq!(app.send(delete(&session)).await.status, StatusCode::OK);
+    }
+    assert_eq!(
+        app.send(delete(&session)).await.status,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    assert_eq!(app.send(delete(&other)).await.status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn requests_are_limited_per_address() {
+    let app = TestApp::new().await;
+
+    for _ in 0..600 {
+        assert_eq!(
+            app.get("/api/me", None).await.status,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    assert_eq!(
+        app.get("/api/me", None).await.status,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    // Health checks are not limited.
+    assert_eq!(app.get("/health", None).await.status, StatusCode::OK);
 }

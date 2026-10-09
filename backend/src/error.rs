@@ -2,7 +2,7 @@ use std::error::Error;
 
 use axum::Json;
 use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use ts_rs::TS;
@@ -21,6 +21,8 @@ pub enum AppError {
     Unauthorized(String),
     #[error("Forbidden: {0}")]
     Forbidden(String),
+    #[error("Too many requests, retry in {} s", .0.as_secs())]
+    TooManyRequests(std::time::Duration),
     #[error("Web client error: {0}")]
     Client(#[from] ClientError),
     #[error("Unexpected error: {0}")]
@@ -42,6 +44,7 @@ impl AppError {
             AppError::InvalidPayload(rejection) => rejection.status(),
             AppError::InvalidQuery(rejection) => rejection.status(),
             AppError::Forbidden(_) => StatusCode::FORBIDDEN,
+            AppError::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             AppError::Unauthorized(_) | AppError::Client(ClientError::BadCredentials) => {
                 StatusCode::UNAUTHORIZED
             }
@@ -65,7 +68,15 @@ impl IntoResponse for AppError {
             message: self.to_string(),
             stacktrace: collect_stacktrace(&self),
         };
-        (code, Json(body)).into_response()
+        let mut response = (code, Json(body)).into_response();
+        if let AppError::TooManyRequests(retry_after) = self {
+            // Round up, a client retrying early would hit the limit again.
+            let seconds = retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0);
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from(seconds.max(1)));
+        }
+        response
     }
 }
 

@@ -20,10 +20,13 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("Unable to bind {listen_addr}"))?;
     tracing::info!("Listening on {listen_addr}");
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("Server failed")
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("Server failed")
 }
 
 async fn shutdown_signal() {

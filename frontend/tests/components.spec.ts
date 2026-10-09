@@ -21,11 +21,11 @@ vi.mock("@/api", () => ({
   }
 }));
 
-function unauthorized(): AxiosError {
+function httpError(status: number): AxiosError {
   const config = { headers: new AxiosHeaders() };
-  return new AxiosError("Unauthorized", "ERR_BAD_REQUEST", config, null, {
-    status: 401,
-    statusText: "Unauthorized",
+  return new AxiosError("Request failed", "ERR_BAD_REQUEST", config, null, {
+    status,
+    statusText: "",
     data: {},
     headers: {},
     config
@@ -60,7 +60,7 @@ describe("LoginView", () => {
   });
 
   it("shows an error for bad credentials", async () => {
-    vi.mocked(api.login).mockRejectedValue(unauthorized());
+    vi.mocked(api.login).mockRejectedValue(httpError(401));
     const { wrapper } = mountWithPlugins(LoginView);
 
     await fillLoginForm(wrapper);
@@ -69,6 +69,18 @@ describe("LoginView", () => {
 
     expect(wrapper.text()).toContain("Incorrect username or password");
     expect(useAccountStore().isAuthenticated).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("asks to wait when rate limited", async () => {
+    vi.mocked(api.login).mockRejectedValue(httpError(429));
+    const { wrapper } = mountWithPlugins(LoginView);
+
+    await fillLoginForm(wrapper);
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Too many attempts, try again later");
     wrapper.unmount();
   });
 
@@ -181,6 +193,15 @@ describe("NotificationTable", () => {
     settings.itemsPerPage = 50;
     await flushPromises();
     expect(api.notifications).toHaveBeenLastCalledWith(50, 0, "Romaji");
+    wrapper.unmount();
+  });
+
+  it("reports rate limiting", async () => {
+    vi.mocked(api.notifications).mockRejectedValue(httpError(429));
+    const { wrapper } = mountWithPlugins(NotificationTable);
+    await flushPromises();
+
+    expect(document.body.textContent).toContain("Too many attempts, try again later");
     wrapper.unmount();
   });
 

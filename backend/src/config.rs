@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 
 use anyhow::Context;
+use ipnet::IpNet;
 
 use crate::service::Database;
 
@@ -14,6 +15,9 @@ pub struct Config {
     pub redis_url: Option<String>,
     /// `CORS_ALLOWED_ORIGINS`: comma separated list of origins allowed to call the API.
     pub cors_allowed_origins: Vec<String>,
+    /// `TRUSTED_PROXIES`: comma separated networks of reverse proxies whose
+    /// `X-Forwarded-For` is trusted, defaults to loopback.
+    pub trusted_proxies: Vec<IpNet>,
     /// Base URL for every supported database (overridable for testing).
     pub database_urls: HashMap<Database, String>,
 }
@@ -33,14 +37,23 @@ impl Config {
             .map(|origins| parse_list(&origins))
             .unwrap_or_default();
 
+        let trusted_proxies = crate::client_ip::parse_networks(
+            &std::env::var("TRUSTED_PROXIES")
+                .unwrap_or_else(|_| DEFAULT_TRUSTED_PROXIES.to_string()),
+        )
+        .context("Invalid TRUSTED_PROXIES")?;
+
         Ok(Config {
             listen_addr,
             redis_url,
             cors_allowed_origins,
+            trusted_proxies,
             database_urls: default_database_urls(),
         })
     }
 }
+
+pub const DEFAULT_TRUSTED_PROXIES: &str = "127.0.0.1/32,::1/128";
 
 pub fn default_database_urls() -> HashMap<Database, String> {
     Database::ALL

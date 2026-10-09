@@ -19,7 +19,7 @@ import {
 
 const settings = useSettingsStore();
 const { t } = useLocale();
-const { notifications, page, pageCount, loading, deleting, failed, load, remove } =
+const { notifications, page, pageCount, loading, deleting, error, load, remove } =
   useNotifications();
 
 const selectedTab = ref<TabType>("song");
@@ -28,6 +28,12 @@ const selected = ref<number[]>([]);
 const clicked = ref<SongNotification | null>(null);
 
 const busy = computed(() => loading.value || deleting.value);
+const showError = computed({
+  get: () => error.value !== null,
+  set: value => {
+    if (!value) error.value = null;
+  }
+});
 
 const tabItems = computed(() =>
   notificationsForTab(notifications.value, selectedTab.value).filter(n =>
@@ -175,10 +181,10 @@ onMounted(() => load(1));
       @update:model-value="changePage"
     />
 
-    <v-snackbar v-model="failed" color="error">
-      {{ t("$vuetify.connectionError") }}
+    <v-snackbar v-model="showError" color="error">
+      {{ error ? t(error) : "" }}
       <template #actions>
-        <v-btn variant="text" @click="failed = false">{{ t("$vuetify.close") }}</v-btn>
+        <v-btn variant="text" @click="showError = false">{{ t("$vuetify.close") }}</v-btn>
       </template>
     </v-snackbar>
 

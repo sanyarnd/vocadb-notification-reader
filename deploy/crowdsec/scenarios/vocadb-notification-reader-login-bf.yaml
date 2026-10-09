@@ -1,0 +1,26 @@
+# Brute force of VocaDB credentials through the reader.
+# Failed logins are visible in the Caddy access log as `POST /api/session` answered
+# with 401 (wrong credentials) or 429 (rate limited by the backend).
+type: leaky
+name: vocadb-notification-reader/login-bf
+description: "Detect brute force of VocaDB credentials through vocadb-notification-reader"
+filter: |
+  evt.Meta.log_type == 'http_access-log' &&
+  evt.Meta.http_verb == 'POST' &&
+  evt.Meta.http_path == '/api/session' &&
+  evt.Meta.http_status in ['401', '429']
+groupby: evt.Meta.source_ip
+distinct: ""
+# 10 failures in quick succession; one failure is forgiven per minute.
+capacity: 9
+leakspeed: 1m
+blackhole: 5m
+labels:
+  service: http
+  confidence: 3
+  spoofable: 0
+  classification:
+    - attack.T1110
+  behavior: "http:bruteforce"
+  label: "VocaDB credentials brute force"
+  remediation: true

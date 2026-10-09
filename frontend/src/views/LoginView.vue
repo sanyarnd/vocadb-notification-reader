@@ -3,7 +3,7 @@ import { ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useLocale } from "vuetify";
 
-import { isUnauthorized } from "@/api/client";
+import { isRateLimited, isUnauthorized } from "@/api/client";
 import { type Database, databases } from "@/api/dto";
 import { useAccountStore } from "@/stores/account";
 
@@ -23,6 +23,12 @@ const required = (key: string) => (value: string) => value.length > 0 || t(key);
 
 watch([username, password], () => (errorMessage.value = null));
 
+function errorKey(error: unknown): string {
+  if (isUnauthorized(error)) return "$vuetify.login.badCredentials";
+  if (isRateLimited(error)) return "$vuetify.tooManyRequests";
+  return "$vuetify.connectionError";
+}
+
 async function submit(): Promise<void> {
   if (!valid.value || loginInProgress.value) return;
 
@@ -36,9 +42,7 @@ async function submit(): Promise<void> {
     });
     await router.push({ name: "home" });
   } catch (e) {
-    errorMessage.value = t(
-      isUnauthorized(e) ? "$vuetify.login.badCredentials" : "$vuetify.connectionError"
-    );
+    errorMessage.value = t(errorKey(e));
   } finally {
     loginInProgress.value = false;
   }

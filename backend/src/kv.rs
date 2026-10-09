@@ -99,6 +99,45 @@ impl Kv {
         Ok(())
     }
 
+    /// Increments a counter that expires `window` after its first increment.
+    /// Returns the new value and the time left until the counter resets.
+    pub async fn increment(&self, key: &str, window: Duration) -> anyhow::Result<(u64, Duration)> {
+        let window = window.max(Duration::from_secs(1));
+        match self {
+            Kv::Redis(redis) => {
+                let (count, (), ttl): (u64, (), i64) = redis::pipe()
+                    .atomic()
+                    .incr(key, 1)
+                    .cmd("EXPIRE")
+                    .arg(key)
+                    .arg(window.as_secs())
+                    .arg("NX")
+                    .ttl(key)
+                    .query_async(&mut redis.clone())
+                    .await?;
+                let ttl = if ttl > 0 {
+                    Duration::from_secs(ttl as u64)
+                } else {
+                    window
+                };
+                Ok((count, ttl))
+            }
+            Kv::Memory(map) => {
+                let mut map = map.lock().unwrap();
+                let now = Instant::now();
+                let entry = map
+                    .entry(key.to_string())
+                    .or_insert_with(|| ("0".to_string(), now + window));
+                if entry.1 <= now {
+                    *entry = ("0".to_string(), now + window);
+                }
+                let count = entry.0.parse::<u64>().unwrap_or(0) + 1;
+                entry.0 = count.to_string();
+                Ok((count, entry.1 - now))
+            }
+        }
+    }
+
     /// Remaining lifetime of a key, `None` when it doesn't exist.
     pub async fn ttl(&self, key: &str) -> anyhow::Result<Option<Duration>> {
         match self {
@@ -155,6 +194,29 @@ pub(crate) mod tests {
         kv.delete(std::slice::from_ref(&key)).await.unwrap();
         assert_eq!(kv.get(&key).await.unwrap(), None);
         kv.delete(&[]).await.unwrap();
+
+        let counter = format!("{key}:counter");
+        for expected in 1..=3 {
+            let (count, ttl) = kv.increment(&counter, hour).await.unwrap();
+            assert_eq!(count, expected);
+            assert!(
+                ttl <= hour && ttl > hour - Duration::from_secs(5),
+                "{ttl:?}"
+            );
+        }
+        kv.delete(&[counter]).await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn memory_counters_reset_after_window() {
+        let kv = Kv::memory();
+        let window = Duration::from_secs(60);
+        assert_eq!(kv.increment("c", window).await.unwrap().0, 1);
+        tokio::time::advance(Duration::from_secs(30)).await;
+        let (count, ttl) = kv.increment("c", window).await.unwrap();
+        assert_eq!((count, ttl), (2, Duration::from_secs(30)));
+        tokio::time::advance(Duration::from_secs(31)).await;
+        assert_eq!(kv.increment("c", window).await.unwrap().0, 1);
     }
 
     #[tokio::test]

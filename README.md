@@ -29,6 +29,7 @@ Configuration is done through environment variables:
 | `LISTEN_ADDR`          | `0.0.0.0:8080` | Address to listen on                                                                              |
 | `REDIS_URL`            | —              | Valkey/Redis for sessions and cache, e.g. `redis://valkey:6379/0`. Required for production       |
 | `CORS_ALLOWED_ORIGINS` | —              | Comma separated list of origins allowed to call the API (e.g. the frontend CDN origin)           |
+| `TRUSTED_PROXIES`      | loopback       | Comma separated networks of reverse proxies whose `X-Forwarded-For` is trusted                   |
 | `RUST_LOG`             | `info`         | Log filter                                                                                        |
 
 Sessions live on the server: after login the client receives an opaque random token,
@@ -64,6 +65,25 @@ services:
 volumes:
   valkey:
 ```
+
+### Rate limits and client addresses
+
+Limits are counted in Valkey/Redis, so they hold across restarts and replicas, and answered
+with `429` and `Retry-After`:
+
+| What                               | Limit             |
+|------------------------------------|-------------------|
+| Any API request from one address   | 600 per minute    |
+| Login attempts from one address    | 20 per 15 minutes |
+| Login attempts to one account      | 10 per 15 minutes |
+| Requests within one session        | 120 per minute    |
+
+The client address is taken from `X-Forwarded-For` only when the request comes from
+`TRUSTED_PROXIES` (loopback by default), so it can't be spoofed. Make sure the address the
+reverse proxy connects from is listed there.
+
+Repeated failed logins and rate limit abuse can be banned with CrowdSec, see
+[deploy/crowdsec](deploy/crowdsec/README.md).
 
 ### API
 

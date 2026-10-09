@@ -1,0 +1,12 @@
+# Shorter bans for the vocadb-notification-reader scenarios.
+#
+# A single address may be shared by many people (NAT), so bans are kept short.
+# Put this document before `default_ip_remediation` in /etc/crowdsec/profiles.yaml.
+name: vocadb_notification_reader_remediation
+filters:
+  - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() startsWith "vocadb-notification-reader/"
+decisions:
+  - type: ban
+    duration: 1h
+on_success: break
+---
