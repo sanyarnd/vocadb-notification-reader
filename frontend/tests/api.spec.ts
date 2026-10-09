@@ -47,17 +47,26 @@ describe("api client", () => {
     await expect(api.me()).resolves.toEqual(account());
   });
 
-  it("requests notifications with paging and language", async () => {
+  it("requests notifications of a type with paging, language and search", async () => {
     const { api, mock } = setup();
+    const query = {
+      type: "artist",
+      offset: 50,
+      limit: 25,
+      language: "Romaji",
+      search: "miku"
+    } as const;
+    const response = {
+      totalCount: 0,
+      notifications: [],
+      counts: { song: 0, artist: 0, album: 0, event: 0, report: 0, unknown: 0 }
+    };
     mock.onGet("/api/notifications").reply(config => {
-      expect(config.params).toEqual({ offset: 50, limit: 25, language: "Romaji" });
-      return [200, { totalCount: 0, notifications: [] }];
+      expect(config.params).toEqual(query);
+      return [200, response];
     });
 
-    await expect(api.notifications(25, 50, "Romaji")).resolves.toEqual({
-      totalCount: 0,
-      notifications: []
-    });
+    await expect(api.notifications(query)).resolves.toEqual(response);
   });
 
   it("deletes notifications by id", async () => {

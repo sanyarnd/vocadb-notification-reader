@@ -9,21 +9,24 @@ import { useNotifications } from "@/composables/useNotifications";
 import { useSettingsStore } from "@/stores/settings";
 import { formatDate } from "@/utils/date";
 import { extractUrlFromMarkdown, removeMarkdown } from "@/utils/markdown";
-import {
-  matchesSearch,
-  notificationsForTab,
-  tabs,
-  tabTypes,
-  type TabType
-} from "@/utils/notifications";
+import { tabIcons, tabTypes } from "@/utils/notifications";
 
 const settings = useSettingsStore();
 const { t } = useLocale();
-const { notifications, page, pageCount, loading, deleting, error, load, remove } =
-  useNotifications();
+const {
+  kind: selectedTab,
+  search,
+  notifications,
+  counts,
+  page,
+  pageCount,
+  loading,
+  deleting,
+  error,
+  load,
+  remove
+} = useNotifications();
 
-const selectedTab = ref<TabType>("song");
-const search = ref<string | null>("");
 const selected = ref<number[]>([]);
 const clicked = ref<SongNotification | null>(null);
 
@@ -34,12 +37,6 @@ const showError = computed({
     if (!value) error.value = null;
   }
 });
-
-const tabItems = computed(() =>
-  notificationsForTab(notifications.value, selectedTab.value).filter(n =>
-    matchesSearch(n, search.value)
-  )
-);
 
 const headers = computed(() =>
   selectedTab.value === "song"
@@ -69,10 +66,6 @@ const headers = computed(() =>
         { key: "originalBody", title: t("$vuetify.notification.header.text"), width: "70%" }
       ]
 );
-
-function tabCount(tab: TabType): number {
-  return notificationsForTab(notifications.value, tab).length;
-}
 
 function changePage(target: number): void {
   selected.value = [];
@@ -105,13 +98,13 @@ onMounted(() => load(1));
     <v-card>
       <v-tabs v-model="selectedTab" grow>
         <v-tab v-for="tab in tabTypes" :key="tab" :value="tab">
-          <v-icon start>{{ tabs[tab].icon }}</v-icon>
+          <v-icon start>{{ tabIcons[tab] }}</v-icon>
           {{ t(`$vuetify.notification.type.${tab}`) }}
           <v-badge
             class="ms-2"
             inline
-            :color="tabCount(tab) === 0 ? 'grey' : 'primary'"
-            :content="tabCount(tab)"
+            :color="counts[tab] === 0 ? 'grey' : 'primary'"
+            :content="counts[tab]"
           />
         </v-tab>
       </v-tabs>
@@ -130,7 +123,7 @@ onMounted(() => load(1));
         v-model="selected"
         item-value="id"
         :headers="headers"
-        :items="tabItems"
+        :items="notifications"
         :items-per-page="-1"
         :loading="busy"
         height="calc(100vh - 340px)"

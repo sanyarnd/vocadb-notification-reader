@@ -8,7 +8,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::cache::{Cache, MESSAGE_TTL, SONG_TTL};
+use futures::{StreamExt, TryStreamExt};
+
+use crate::cache::{Cache, INBOX_TTL, MESSAGE_TTL, SONG_TTL};
 use crate::client::models::{LanguagePreference, SongForApiContract, UserMessageContract};
 use crate::client::{Client, Result};
 use crate::service::dto::{
@@ -57,6 +59,45 @@ impl Database {
     }
 }
 
+/// Type of a notification, as shown by the frontend tabs.
+#[derive(Serialize, Deserialize, TS, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum NotificationKind {
+    Song,
+    Artist,
+    Album,
+    Event,
+    Report,
+    Unknown,
+}
+
+/// Amount of notifications of every kind.
+#[derive(Serialize, TS, Debug, Default, Clone, PartialEq, Eq)]
+#[ts(export)]
+pub struct KindCounts {
+    pub song: u32,
+    pub artist: u32,
+    pub album: u32,
+    pub event: u32,
+    pub report: u32,
+    pub unknown: u32,
+}
+
+impl KindCounts {
+    pub fn add(&mut self, kind: NotificationKind) {
+        let counter = match kind {
+            NotificationKind::Song => &mut self.song,
+            NotificationKind::Artist => &mut self.artist,
+            NotificationKind::Album => &mut self.album,
+            NotificationKind::Event => &mut self.event,
+            NotificationKind::Report => &mut self.report,
+            NotificationKind::Unknown => &mut self.unknown,
+        };
+        *counter += 1;
+    }
+}
+
 /// Kind of a notification, derived from a message subject and body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageKind {
@@ -66,6 +107,19 @@ pub enum MessageKind {
     Event,
     Report,
     Unknown,
+}
+
+impl MessageKind {
+    pub fn kind(self) -> NotificationKind {
+        match self {
+            MessageKind::Song(_) => NotificationKind::Song,
+            MessageKind::Artist => NotificationKind::Artist,
+            MessageKind::Album => NotificationKind::Album,
+            MessageKind::Event => NotificationKind::Event,
+            MessageKind::Report => NotificationKind::Report,
+            MessageKind::Unknown => NotificationKind::Unknown,
+        }
+    }
 }
 
 pub fn classify_message(database: Database, subject: &str, body: &str) -> MessageKind {
@@ -96,24 +150,99 @@ pub struct Source<'a> {
     pub user_id: i32,
 }
 
-pub async fn load_notification_details(
-    source: &Source<'_>,
-    language: LanguagePreference,
-    message_id: i32,
-) -> Result<Notification> {
-    let database = source.database;
-    let message: UserMessageContract = source
+/// Upper bound of messages read from an inbox.
+pub const MAX_INBOX_SIZE: usize = 5000;
+/// Messages requested per page of the inbox listing.
+const LIST_PAGE_SIZE: i32 = 50;
+/// Simultaneous message requests while reading the inbox; messages are cached afterwards.
+const INBOX_CONCURRENCY: usize = 16;
+
+/// A message of the inbox together with its kind.
+#[derive(Debug)]
+pub struct InboxEntry {
+    pub message: UserMessageContract,
+    pub kind: MessageKind,
+}
+
+impl InboxEntry {
+    /// Case-insensitive search in the subject and the text, which contain the names
+    /// of the entries (e.g. song title and artist).
+    pub fn matches(&self, query: &str) -> bool {
+        let query = query.trim().to_lowercase();
+        query.is_empty()
+            || self.message.subject.to_lowercase().contains(&query)
+            || self.message.body.to_lowercase().contains(&query)
+    }
+}
+
+/// IDs of all messages in the notifications inbox, newest first.
+pub async fn inbox_ids(source: &Source<'_>) -> Result<Vec<i32>> {
+    let fetch = async {
+        let mut ids = Vec::new();
+        loop {
+            let offset = i32::try_from(ids.len()).unwrap_or(i32::MAX);
+            let page = source
+                .client
+                .get_messages(source.user_id, offset, LIST_PAGE_SIZE)
+                .await?;
+            let received = page.items.len();
+            ids.extend(page.items.into_iter().map(|m| m.id));
+
+            let total = usize::try_from(page.total_count).unwrap_or(0);
+            if received == 0 || ids.len() >= total || ids.len() >= MAX_INBOX_SIZE {
+                break;
+            }
+        }
+        ids.truncate(MAX_INBOX_SIZE);
+        Ok(serde_json::to_string(&ids).expect("IDs are serializable"))
+    };
+
+    source
         .cache
         .get_or_fetch(
-            &Cache::message_key(database, source.user_id, message_id),
+            &Cache::inbox_key(source.database, source.user_id),
+            INBOX_TTL,
+            fetch,
+        )
+        .await
+}
+
+pub async fn load_message(source: &Source<'_>, message_id: i32) -> Result<UserMessageContract> {
+    source
+        .cache
+        .get_or_fetch(
+            &Cache::message_key(source.database, source.user_id, message_id),
             MESSAGE_TTL,
             source.client.get_message_json(message_id),
         )
-        .await?;
-    let kind = classify_message(database, &message.subject, &message.body);
-    let base = base_notification(message);
+        .await
+}
 
-    Ok(match kind {
+/// Every message of the notifications inbox with its kind, newest first.
+///
+/// Every message has to be read once to tell its kind; note that VocaDB marks a message
+/// as read when it is loaded.
+pub async fn inbox(source: &Source<'_>) -> Result<Vec<InboxEntry>> {
+    let ids = inbox_ids(source).await?;
+    futures::stream::iter(ids)
+        .map(|id| async move {
+            let message = load_message(source, id).await?;
+            let kind = classify_message(source.database, &message.subject, &message.body);
+            Ok(InboxEntry { message, kind })
+        })
+        .buffered(INBOX_CONCURRENCY)
+        .try_collect()
+        .await
+}
+
+/// Turns an inbox entry into a notification, loading the song details if needed.
+pub async fn notification(
+    source: &Source<'_>,
+    entry: InboxEntry,
+    language: LanguagePreference,
+) -> Result<Notification> {
+    let base = base_notification(entry.message);
+    Ok(match entry.kind {
         MessageKind::Song(song_id) => {
             Notification::Song(song_notification(source, song_id, base, language).await?)
         }
@@ -242,6 +371,54 @@ mod tests {
         assert_eq!(
             classify_message(Database::VocaDb, "New song", "https://vocadbxnet/S/1"),
             MessageKind::Unknown
+        );
+    }
+
+    fn entry(subject: &str, body: &str) -> InboxEntry {
+        let message = serde_json::from_value(serde_json::json!({
+            "id": 1,
+            "subject": subject,
+            "body": body,
+            "createdFormatted": "11.02.2018 11:19"
+        }))
+        .unwrap();
+        InboxEntry {
+            message,
+            kind: MessageKind::Unknown,
+        }
+    }
+
+    #[test]
+    fn searches_subject_and_text() {
+        let entry = entry(
+            "New song tagged with VOCALOID",
+            "A new song, '[Melt](https://vocadb.net/S/1)', by ryo was just added.",
+        );
+        assert!(entry.matches(""));
+        assert!(entry.matches("  "));
+        assert!(entry.matches("vocaloid"));
+        assert!(entry.matches(" MELT "));
+        assert!(entry.matches("ryo"));
+        assert!(!entry.matches("rin"));
+    }
+
+    #[test]
+    fn counts_kinds() {
+        let mut counts = KindCounts::default();
+        for kind in [
+            MessageKind::Song(1),
+            MessageKind::Song(2),
+            MessageKind::Report,
+        ] {
+            counts.add(kind.kind());
+        }
+        assert_eq!(
+            counts,
+            KindCounts {
+                song: 2,
+                report: 1,
+                ..KindCounts::default()
+            }
         );
     }
 }

@@ -31,7 +31,7 @@ use crate::error::AppError;
 use crate::kv::Kv;
 use crate::rate_limit::{self, RateLimiter};
 use crate::service::dto::Notification;
-use crate::service::{Database, Source, load_notification_details};
+use crate::service::{self, Database, KindCounts, NotificationKind, Source};
 use crate::session::{Session, SessionStore};
 
 pub type Result<T, E = AppError> = core::result::Result<T, E>;
@@ -338,17 +338,27 @@ pub struct Account {
 #[derive(Deserialize, TS, Debug)]
 #[ts(export)]
 pub struct NotificationsQuery {
+    #[serde(rename = "type")]
+    pub kind: NotificationKind,
     pub offset: i32,
     pub limit: i32,
     pub language: LanguagePreference,
+    /// Searched in the subject and the text of notifications.
+    #[serde(default)]
+    #[ts(optional)]
+    pub search: Option<String>,
 }
 
 #[derive(Serialize, TS, Debug)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct NotificationsResponse {
+    /// Requested page of notifications of the requested type.
     pub notifications: Vec<Notification>,
-    pub total_count: i32,
+    /// Amount of notifications of the requested type matching the search.
+    pub total_count: u32,
+    /// Amount of notifications of every type matching the search.
+    pub counts: KindCounts,
 }
 
 #[derive(Deserialize, TS, Debug)]
@@ -449,19 +459,33 @@ async fn fetch_notifications(
         user_id: auth.session.user_id,
     };
     let result = async {
-        let messages = client
-            .get_messages(source.user_id, query.offset, query.limit)
-            .await?;
+        let search = query.search.as_deref().unwrap_or_default();
+        let mut counts = KindCounts::default();
+        let mut matching = Vec::new();
+        for entry in service::inbox(&source).await? {
+            if entry.matches(search) {
+                counts.add(entry.kind.kind());
+                if entry.kind.kind() == query.kind {
+                    matching.push(entry);
+                }
+            }
+        }
 
-        let notifications = futures::stream::iter(messages.items)
-            .map(|message| load_notification_details(&source, query.language, message.id))
+        let total_count = u32::try_from(matching.len()).unwrap_or(u32::MAX);
+        let page = matching
+            .into_iter()
+            .skip(usize::try_from(query.offset).unwrap_or_default())
+            .take(usize::try_from(query.limit).unwrap_or_default());
+        let notifications = futures::stream::iter(page)
+            .map(|entry| service::notification(&source, entry, query.language))
             .buffered(UPSTREAM_CONCURRENCY)
             .try_collect()
             .await?;
 
         Ok(NotificationsResponse {
             notifications,
-            total_count: messages.total_count,
+            total_count,
+            counts,
         })
     }
     .await;
@@ -492,6 +516,7 @@ async fn delete_notifications(
         .ids
         .iter()
         .map(|&id| Cache::message_key(database, user_id, id))
+        .chain([Cache::inbox_key(database, user_id)])
         .collect();
     state.inner.cache.evict(&keys).await;
 

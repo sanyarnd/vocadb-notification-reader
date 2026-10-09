@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance } from "axios";
 
-import type { Account, LoginRequest, NotificationsResponse, RequestLanguage } from "@/api/dto";
+import type { Account, LoginRequest, NotificationsQuery, NotificationsResponse } from "@/api/dto";
 
 export interface ApiClientOptions {
   baseURL: string;
@@ -43,13 +43,10 @@ export function createApi(http: AxiosInstance) {
       return (await http.get<Account>("/api/me")).data;
     },
 
-    async notifications(
-      limit: number,
-      offset: number,
-      language: RequestLanguage
-    ): Promise<NotificationsResponse> {
-      const params = { offset, limit, language };
-      return (await http.get<NotificationsResponse>("/api/notifications", { params })).data;
+    async notifications(params: NotificationsQuery): Promise<NotificationsResponse> {
+      // Reading a large inbox for the first time takes a while.
+      const config = { params, timeout: 180_000 };
+      return (await http.get<NotificationsResponse>("/api/notifications", config)).data;
     },
 
     async deleteNotifications(ids: number[]): Promise<void> {

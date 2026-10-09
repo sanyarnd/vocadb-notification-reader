@@ -116,12 +116,18 @@ describe("NotificationTable", () => {
     tags: [{ id: 2, name: "pop", count: 1, categoryName: null }]
   });
   const artist = artistNotification(2, "[Miku](https://vocadb.net/Ar/1)");
+  const counts = { song: 60, artist: 1, album: 0, event: 0, report: 0, unknown: 0 };
+
+  function respond() {
+    vi.mocked(api.notifications).mockImplementation(async query => ({
+      notifications: query.type === "artist" ? [artist] : [song, otherSong],
+      totalCount: query.type === "artist" ? 1 : 60,
+      counts
+    }));
+  }
 
   async function mountTable() {
-    vi.mocked(api.notifications).mockResolvedValue({
-      totalCount: 60,
-      notifications: [song, artist, otherSong]
-    });
+    respond();
     const result = mountWithPlugins(NotificationTable);
     await flushPromises();
     return result;
@@ -131,24 +137,45 @@ describe("NotificationTable", () => {
     return wrapper.findAll("tbody tr").map(row => row.text());
   }
 
-  it("loads the first page and shows songs", async () => {
+  function lastQuery() {
+    return vi.mocked(api.notifications).mock.lastCall?.[0];
+  }
+
+  it("loads the first page of songs", async () => {
     const { wrapper } = await mountTable();
 
-    expect(api.notifications).toHaveBeenCalledWith(25, 0, "Default");
+    expect(lastQuery()).toEqual({
+      type: "song",
+      offset: 0,
+      limit: 25,
+      language: "Default",
+      search: undefined
+    });
     expect(rows(wrapper)).toHaveLength(2);
     expect(rows(wrapper)[0]).toContain("Melt");
     expect(rows(wrapper)[1]).toContain("World is Mine");
-    // 60 notifications with 25 per page
+    // 60 songs with 25 per page
     expect(wrapper.findAll(".v-pagination__item")).toHaveLength(3);
     wrapper.unmount();
   });
 
-  it("filters by search query", async () => {
+  it("shows counts of the whole inbox on the tabs", async () => {
     const { wrapper } = await mountTable();
 
-    await wrapper.find(".v-text-field input").setValue("pop");
-    expect(rows(wrapper)).toHaveLength(1);
-    expect(rows(wrapper)[0]).toContain("World is Mine");
+    const tabs = wrapper.findAll(".v-tab").map(tab => tab.text().replace(/\s+/g, " "));
+    expect(tabs[0]).toContain("Song 60");
+    expect(tabs[1]).toContain("Artist 1");
+    wrapper.unmount();
+  });
+
+  it("searches on the server", async () => {
+    const { wrapper } = await mountTable();
+
+    await wrapper.find(".v-text-field input").setValue(" pop ");
+    await new Promise(resolve => setTimeout(resolve, 450));
+    await flushPromises();
+
+    expect(lastQuery()).toMatchObject({ type: "song", offset: 0, search: "pop" });
     wrapper.unmount();
   });
 
@@ -159,15 +186,27 @@ describe("NotificationTable", () => {
     await artistTab.trigger("click");
     await flushPromises();
 
+    expect(lastQuery()).toMatchObject({ type: "artist", offset: 0 });
     expect(rows(wrapper)).toHaveLength(1);
     expect(rows(wrapper)[0]).toContain("New artist");
     expect(rows(wrapper)[0]).toContain("Miku");
     wrapper.unmount();
   });
 
-  it("deletes selected notifications", async () => {
+  it("changes pages", async () => {
+    const { wrapper } = await mountTable();
+
+    await wrapper.findAll(".v-pagination__item button")[2]!.trigger("click");
+    await flushPromises();
+
+    expect(lastQuery()).toMatchObject({ type: "song", offset: 50, limit: 25 });
+    wrapper.unmount();
+  });
+
+  it("deletes selected notifications and reloads the page", async () => {
     vi.mocked(api.deleteNotifications).mockResolvedValue();
     const { wrapper } = await mountTable();
+    const calls = vi.mocked(api.notifications).mock.calls.length;
 
     await wrapper.find("tbody tr input[type=checkbox]").trigger("click");
     await flushPromises();
@@ -177,8 +216,8 @@ describe("NotificationTable", () => {
     await flushPromises();
 
     expect(api.deleteNotifications).toHaveBeenCalledWith([1]);
-    expect(rows(wrapper)).toHaveLength(1);
-    expect(rows(wrapper)[0]).toContain("World is Mine");
+    expect(vi.mocked(api.notifications).mock.calls.length).toBe(calls + 1);
+    expect(lastQuery()).toMatchObject({ type: "song", offset: 0 });
     wrapper.unmount();
   });
 
@@ -188,11 +227,11 @@ describe("NotificationTable", () => {
 
     settings.preferredLanguage = "Romaji";
     await flushPromises();
-    expect(api.notifications).toHaveBeenLastCalledWith(25, 0, "Romaji");
+    expect(lastQuery()).toMatchObject({ limit: 25, offset: 0, language: "Romaji" });
 
     settings.itemsPerPage = 50;
     await flushPromises();
-    expect(api.notifications).toHaveBeenLastCalledWith(50, 0, "Romaji");
+    expect(lastQuery()).toMatchObject({ limit: 50, offset: 0, language: "Romaji" });
     wrapper.unmount();
   });
 
