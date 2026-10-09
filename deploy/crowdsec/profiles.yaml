@@ -1,0 +1,13 @@
+# Shorter bans for the vocadb-notification-reader scenarios.
+#
+# Bans are enforced by the firewall in front of every service, and a single address
+# may be shared by many people (mobile CGNAT), so they are kept short.
+# Put this document before `default_ip_remediation` in /etc/crowdsec/profiles.yaml.
+name: vocadb_notification_reader_remediation
+filters:
+  - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() startsWith "vocadb-notification-reader/"
+decisions:
+  - type: ban
+    duration: 1h
+on_success: break
+---

@@ -1,0 +1,36 @@
+name: CrowdSec
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/crowdsec.yml
+      - deploy/crowdsec/**
+  pull_request:
+    paths:
+      - .github/workflows/crowdsec.yml
+      - deploy/crowdsec/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scenarios:
+    name: Scenarios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that test logs are up to date
+        run: |
+          python3 deploy/crowdsec/tests/generate.py
+          git diff --exit-code -- deploy/crowdsec/tests/cases
+
+      - name: Replay test logs through CrowdSec
+        run: >
+          docker run --rm
+          -v "$PWD/deploy/crowdsec:/vnr:ro"
+          --entrypoint /vnr/tests/run.sh
+          crowdsecurity/crowdsec:v1.8.1

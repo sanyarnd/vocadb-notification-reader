@@ -1,0 +1,22 @@
+# A client that keeps hammering the API after being rate limited (429).
+type: leaky
+name: vocadb-notification-reader/rate-limit
+description: "Detect clients ignoring rate limits of vocadb-notification-reader"
+filter: |
+  evt.Meta.log_type == 'http_access-log' &&
+  evt.Meta.http_status == '429' &&
+  evt.Meta.http_path startsWith '/api/'
+groupby: evt.Meta.source_ip
+# 30 rejected requests in a burst; one is forgiven every 10 seconds.
+capacity: 29
+leakspeed: 10s
+blackhole: 5m
+labels:
+  service: http
+  confidence: 2
+  spoofable: 0
+  classification:
+    - attack.T1498
+  behavior: "http:flood"
+  label: "Rate limit abuse"
+  remediation: true
