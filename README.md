@@ -57,7 +57,7 @@ services:
     depends_on: [valkey]
 
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9-alpine
     command: ["valkey-server", "--appendonly", "yes"]
     volumes:
       - valkey:/data

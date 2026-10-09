@@ -1,12 +1,14 @@
 version: 2
 updates:
+  # Minor and patch updates come in one PR per ecosystem; major updates come one per
+  # dependency, so a single breaking update doesn't hold the rest back.
   - package-ecosystem: cargo
     directory: /backend
     schedule:
       interval: weekly
     groups:
       cargo:
-        patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -14,7 +16,12 @@ updates:
       interval: weekly
     groups:
       npm:
-        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 (the Go port) has no JavaScript API yet, which vue-tsc and
+      # typescript-eslint are built on.
+      - dependency-name: typescript
+        versions: [">=7"]
 
   - package-ecosystem: docker
     directory: /backend
