@@ -28,7 +28,12 @@ cat "$ROOT/profiles.yaml" /staging/etc/crowdsec/profiles.yaml >/etc/crowdsec/pro
 cscli machines add --auto --force >/dev/null 2>&1
 
 failed=0
-for log in "$ROOT"/tests/cases/*.log; do
+cases=$(find "$ROOT/tests/cases" -name '*.log' | sort)
+if [ -z "$cases" ]; then
+    echo "FAIL no test cases found"
+    exit 1
+fi
+for log in $cases; do
     name=$(basename "$log" .log)
     expected=$(sort -u "${log%.log}.expected")
     # In time-machine mode with the embedded API crowdsec doesn't exit on its own

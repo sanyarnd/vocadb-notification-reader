@@ -23,6 +23,7 @@ target/
 
 ### log files ###
 *.log
+!deploy/crowdsec/tests/cases/*.log
 hs_err_pid*
 
 ### Node ###

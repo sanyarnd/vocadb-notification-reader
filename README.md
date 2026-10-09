@@ -79,10 +79,8 @@ with `429` and `Retry-After`:
 | Requests within one session        | 120 per minute    |
 
 The client address is taken from `X-Forwarded-For` only when the request comes from
-`TRUSTED_PROXIES` (loopback by default), so it can't be spoofed. When the reverse proxy runs on
-the host network (e.g. Caddy with `--network host`), run the backend on the host network too
-(`LISTEN_ADDR=127.0.0.1:8080`); with a published port Docker forwards connections from its bridge
-gateway, which then has to be added to `TRUSTED_PROXIES`.
+`TRUSTED_PROXIES` (loopback by default), so it can't be spoofed. Make sure the address the
+reverse proxy connects from is listed there.
 
 Repeated failed logins and rate limit abuse can be banned with CrowdSec, see
 [deploy/crowdsec](deploy/crowdsec/README.md).

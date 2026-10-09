@@ -16,7 +16,7 @@ def line(ts, ip, method, uri, status, host="api.foobar.com"):
             "logger": "http.log.access.log0",
             "msg": "handled request",
             "request": {
-                "remote_ip": "10.10.0.2",
+                "remote_ip": "192.0.2.10",
                 "remote_port": "41234",
                 "client_ip": ip,
                 "proto": "HTTP/2.0",

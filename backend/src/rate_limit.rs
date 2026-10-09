@@ -21,7 +21,7 @@ const fn minutes(n: u64) -> Duration {
 }
 
 /// Every request to the API from one address. Generous, as many users may share
-/// an address behind CGNAT.
+/// an address behind NAT.
 pub const PER_IP: Limit = Limit {
     name: "ip",
     requests: 600,

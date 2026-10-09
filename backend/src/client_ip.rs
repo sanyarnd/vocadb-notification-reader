@@ -87,11 +87,11 @@ mod tests {
     #[test]
     fn spoofed_entries_are_skipped() {
         // The client sent "1.1.1.1" itself, the proxy appended the real address.
-        let trusted = parse_networks("127.0.0.1, 10.10.0.0/24").unwrap();
+        let trusted = parse_networks("127.0.0.1, 192.0.2.0/24").unwrap();
         assert_eq!(
             resolve(
                 ip("127.0.0.1"),
-                &headers(&["1.1.1.1, 203.0.113.7", "10.10.0.2"]),
+                &headers(&["1.1.1.1, 203.0.113.7", "192.0.2.2"]),
                 &trusted
             ),
             ip("203.0.113.7")

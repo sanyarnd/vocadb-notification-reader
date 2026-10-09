@@ -11,8 +11,7 @@ to be known to CrowdSec:
 
 The scenarios rely on the `http_access-log` events of the `crowdsecurity/caddy` collection
 (any other HTTP access log parser providing `http_verb`, `http_path` and `http_status` works too).
-The API host must be logged to a file CrowdSec reads, with the real client address
-(e.g. Caddy behind HAProxy with the PROXY protocol logs it as `client_ip`).
+The API host must be logged to a file CrowdSec reads, with the real client address.
 
 ## Installation
 
@@ -21,8 +20,8 @@ cscli collections install crowdsecurity/caddy
 cp scenarios/*.yaml /etc/crowdsec/scenarios/
 ```
 
-Bans are enforced by the bouncer in front of every service, and one address may be shared by
-many people behind mobile CGNAT, so [profiles.yaml](profiles.yaml) shortens them to an hour.
+One address may be shared by many people (NAT), so [profiles.yaml](profiles.yaml) shortens
+the bans to an hour.
 Put its document before `default_ip_remediation` in `/etc/crowdsec/profiles.yaml`.
 
 Then reload CrowdSec (`systemctl reload crowdsec` or restart the container) and check:
