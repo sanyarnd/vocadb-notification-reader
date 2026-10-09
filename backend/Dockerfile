@@ -1,4 +1,4 @@
-FROM rust:1.98-slim-bookworm AS builder
+FROM rust:1.99-slim-trixie AS builder
 WORKDIR /build
 
 # Cache dependencies separately from the application sources.
@@ -12,7 +12,7 @@ RUN mkdir src \
 COPY src ./src
 RUN touch src/main.rs src/lib.rs && cargo build --release --locked
 
-FROM gcr.io/distroless/cc-debian12:nonroot
+FROM gcr.io/distroless/cc-debian13:nonroot
 COPY --from=builder /build/target/release/vocadb-notification-reader /usr/local/bin/vocadb-notification-reader
 
 ENV LISTEN_ADDR=0.0.0.0:8080

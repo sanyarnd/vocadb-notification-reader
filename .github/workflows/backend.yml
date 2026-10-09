@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       valkey:
-        image: valkey/valkey:8-alpine
+        image: valkey/valkey:9-alpine
         ports:
           - 6379:6379
         options: >-
@@ -88,7 +88,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
