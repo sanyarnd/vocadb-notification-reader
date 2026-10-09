@@ -92,7 +92,7 @@ Repeated failed logins and rate limit abuse can be banned with CrowdSec, see
 | `POST`   | `/api/session`                                        | Log in, sets the `__Host-session` cookie       |
 | `DELETE` | `/api/session`                                        | Log out                                        |
 | `GET`    | `/api/me`                                             | Current account, extends the cookie            |
-| `GET`    | `/api/notifications?offset=0&limit=25&language=Default` | Page of notifications                        |
+| `GET`    | `/api/notifications?type=song&offset=0&limit=25&language=Default&search=` | Page of notifications of one type, counts of every type |
 | `DELETE` | `/api/notifications`                                  | Delete notifications, body: `{ "ids": [...] }` |
 | `GET`    | `/health`                                             | Liveness probe                                 |
 

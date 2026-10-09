@@ -518,17 +518,20 @@ async fn fetch_notifications() {
     Mock::given(method("GET"))
         .and(path(format!("/api/users/{USER_ID}/messages")))
         .and(query_param("inbox", "Notifications"))
-        .and(query_param("start", "10"))
-        .and(query_param("maxResults", "3"))
+        .and(query_param("start", "0"))
+        .and(query_param("maxResults", "50"))
         .and(header_eq("cookie", VOCADB_COOKIE))
+        // The listing has no message bodies.
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "items": [
                 message_json(1, "New song tagged", ""),
                 message_json(2, "New artist", ""),
                 message_json(3, "Hello", ""),
             ],
-            "totalCount": 13
+            "totalCount": 3
         })))
+        // The listing is cached between page loads too.
+        .expect(1)
         .mount(server)
         .await;
 
@@ -583,20 +586,29 @@ async fn fetch_notifications() {
         .await;
 
     let session = app.session().await;
-    let uri = "/api/notifications?offset=10&limit=3&language=Romaji";
-    let response = app.get(uri, Some(&session)).await;
+    let app = &app;
+    let fetch = |query: &str| {
+        let uri = format!("/api/notifications?offset=0&limit=25&language=Romaji&{query}");
+        let session = session.clone();
+        async move { app.get(&uri, Some(&session)).await }
+    };
+
+    let response = fetch("type=song").await;
     assert_eq!(response.status, StatusCode::OK, "{}", response.body);
 
     // Messages and songs are served from the cache the second time.
-    let cached = app.get(uri, Some(&session)).await;
+    let cached = fetch("type=song").await;
     assert_eq!(cached.status, StatusCode::OK);
     assert_eq!(cached.body, response.body);
 
     let body = response.body;
-    assert_eq!(body["totalCount"], 13);
-
+    assert_eq!(body["totalCount"], 1);
+    assert_eq!(
+        body["counts"],
+        json!({ "song": 1, "artist": 1, "album": 0, "event": 0, "report": 0, "unknown": 1 })
+    );
     let notifications = body["notifications"].as_array().unwrap();
-    assert_eq!(notifications.len(), 3);
+    assert_eq!(notifications.len(), 1);
 
     let song = &notifications[0];
     assert_eq!(song["notificationType"], "SongNotification");
@@ -627,10 +639,94 @@ async fn fetch_notifications() {
     assert_eq!(pvs[1]["service"], "Piapro");
     assert_eq!(pvs[1]["timestamp"], "20071207");
 
-    assert_eq!(notifications[1]["notificationType"], "ArtistNotification");
-    assert_eq!(notifications[1]["id"], 2);
-    assert_eq!(notifications[2]["notificationType"], "UnknownNotification");
-    assert_eq!(notifications[2]["originalBody"], "Plain message");
+    let artists = fetch("type=artist").await.body;
+    assert_eq!(artists["totalCount"], 1);
+    assert_eq!(
+        artists["notifications"][0]["notificationType"],
+        "ArtistNotification"
+    );
+    assert_eq!(artists["notifications"][0]["id"], 2);
+
+    let unknown = fetch("type=unknown").await.body;
+    assert_eq!(
+        unknown["notifications"][0]["notificationType"],
+        "UnknownNotification"
+    );
+    assert_eq!(unknown["notifications"][0]["originalBody"], "Plain message");
+
+    assert_eq!(fetch("type=album").await.body["totalCount"], 0);
+
+    // The search covers the whole inbox and is reflected in the counts.
+    let found = fetch("type=song&search=MIKU").await.body;
+    assert_eq!(found["totalCount"], 1);
+    assert_eq!(
+        found["counts"],
+        json!({ "song": 1, "artist": 0, "album": 0, "event": 0, "report": 0, "unknown": 0 })
+    );
+    let found = fetch("type=artist&search=vocadb.net/Ar").await.body;
+    assert_eq!(found["notifications"][0]["id"], 2);
+    assert_eq!(found["counts"]["song"], 0);
+}
+
+#[tokio::test]
+async fn inbox_is_read_page_by_page() {
+    let app = TestApp::new().await;
+    let server = &app.vocadb;
+
+    // 120 artist notifications, listed by 50.
+    for start in [0, 50, 100] {
+        let items: Vec<Value> = (start..(start + 50).min(120))
+            .map(|id| message_json(id, "New artist", ""))
+            .collect();
+        Mock::given(method("GET"))
+            .and(path(format!("/api/users/{USER_ID}/messages")))
+            .and(query_param("start", start.to_string()))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({ "items": items, "totalCount": 120 })),
+            )
+            .expect(1)
+            .mount(server)
+            .await;
+    }
+    Mock::given(method("GET"))
+        .and(wiremock::matchers::path_regex(r"^/api/users/messages/\d+$"))
+        .respond_with(|request: &wiremock::Request| {
+            let id: i32 = request
+                .url
+                .path()
+                .rsplit('/')
+                .next()
+                .unwrap()
+                .parse()
+                .unwrap();
+            ResponseTemplate::new(200).set_body_json(message_json(
+                id,
+                "New artist",
+                &format!("https://vocadb.net/Ar/{id}"),
+            ))
+        })
+        .expect(120)
+        .mount(server)
+        .await;
+
+    let session = app.session().await;
+    let response = app
+        .get(
+            "/api/notifications?type=artist&offset=100&limit=25&language=Default",
+            Some(&session),
+        )
+        .await;
+
+    assert_eq!(response.status, StatusCode::OK, "{}", response.body);
+    assert_eq!(response.body["totalCount"], 120);
+    let ids: Vec<i64> = response.body["notifications"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, (100..120).collect::<Vec<_>>());
 }
 
 #[tokio::test]
@@ -641,7 +737,9 @@ async fn fetch_notifications_validates_paging() {
     for (offset, limit) in [(-1, 10), (0, -1), (0, 101)] {
         let response = app
             .get(
-                &format!("/api/notifications?offset={offset}&limit={limit}&language=Default"),
+                &format!(
+                    "/api/notifications?type=song&offset={offset}&limit={limit}&language=Default"
+                ),
                 Some(&session),
             )
             .await;
@@ -666,8 +764,10 @@ async fn delete_notifications() {
     // Deleted messages are evicted from the cache.
     let deleted = Cache::message_key(Database::VocaDb, USER_ID, 1);
     let kept = Cache::message_key(Database::VocaDb, USER_ID, 3);
+    let inbox = Cache::inbox_key(Database::VocaDb, USER_ID);
     app.kv.set(&deleted, "{}", MESSAGE_TTL).await.unwrap();
     app.kv.set(&kept, "{}", MESSAGE_TTL).await.unwrap();
+    app.kv.set(&inbox, "[1, 2, 3]", MESSAGE_TTL).await.unwrap();
 
     let response = app
         .json(
@@ -683,6 +783,7 @@ async fn delete_notifications() {
         (StatusCode::OK, Value::Null)
     );
     assert_eq!(app.kv.get(&deleted).await.unwrap(), None);
+    assert_eq!(app.kv.get(&inbox).await.unwrap(), None);
     assert!(app.kv.get(&kept).await.unwrap().is_some());
 }
 

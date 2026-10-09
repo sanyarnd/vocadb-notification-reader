@@ -14,6 +14,8 @@ use crate::service::Database;
 
 /// Messages never change once sent.
 pub const MESSAGE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// The list of messages changes as notifications arrive, it's only kept between page loads.
+pub const INBOX_TTL: Duration = Duration::from_secs(60);
 /// Songs are edited from time to time (tags, PVs).
 pub const SONG_TTL: Duration = Duration::from_secs(60 * 60);
 
@@ -30,6 +32,10 @@ impl Cache {
     /// Messages are private, so the key includes their recipient.
     pub fn message_key(database: Database, user_id: i32, message_id: i32) -> String {
         format!("{KEY_PREFIX}cache:message:{database:?}:{user_id}:{message_id}")
+    }
+
+    pub fn inbox_key(database: Database, user_id: i32) -> String {
+        format!("{KEY_PREFIX}cache:inbox:{database:?}:{user_id}")
     }
 
     pub fn song_key(database: Database, song_id: i32, language: LanguagePreference) -> String {

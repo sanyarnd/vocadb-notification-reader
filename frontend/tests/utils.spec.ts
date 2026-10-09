@@ -4,10 +4,10 @@ import { stringToColor } from "@/utils/color";
 import { songUrl } from "@/utils/database";
 import { formatDate } from "@/utils/date";
 import { extractUrlFromMarkdown, removeMarkdown } from "@/utils/markdown";
-import { matchesSearch, notificationsForTab } from "@/utils/notifications";
+import { tabIcons, tabTypes } from "@/utils/notifications";
 import { embedUrl, iconForService } from "@/utils/pv";
 
-import { artistNotification, pv, songNotification } from "./fixtures";
+import { pv } from "./fixtures";
 
 describe("stringToColor", () => {
   it("is deterministic and produces hsl colors", () => {
@@ -80,27 +80,7 @@ describe("pv", () => {
 });
 
 describe("notifications", () => {
-  const song = songNotification();
-  const artist = artistNotification(2, "[Miku](https://vocadb.net/Ar/1)");
-
-  it("splits notifications by tab", () => {
-    expect(notificationsForTab([song, artist], "song")).toEqual([song]);
-    expect(notificationsForTab([song, artist], "artist")).toEqual([artist]);
-    expect(notificationsForTab([song, artist], "album")).toEqual([]);
-  });
-
-  it("searches song fields and tags case-insensitively", () => {
-    expect(matchesSearch(song, null)).toBe(true);
-    expect(matchesSearch(song, "  ")).toBe(true);
-    expect(matchesSearch(song, "MELT")).toBe(true);
-    expect(matchesSearch(song, "miku")).toBe(true);
-    expect(matchesSearch(song, "roc")).toBe(true);
-    expect(matchesSearch(song, "jazz")).toBe(false);
-  });
-
-  it("searches the subject and body of other notifications", () => {
-    expect(matchesSearch(artist, "new art")).toBe(true);
-    expect(matchesSearch(artist, "miku")).toBe(true);
-    expect(matchesSearch(artist, "melt")).toBe(false);
+  it("has an icon for every tab", () => {
+    for (const tab of tabTypes) expect(tabIcons[tab]).toMatch(/^mdi-/);
   });
 });
