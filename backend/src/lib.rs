@@ -1,8 +1,10 @@
 pub mod cache;
 pub mod client;
+pub mod client_ip;
 pub mod config;
 pub mod error;
 pub mod kv;
+pub mod rate_limit;
 pub mod service;
 pub mod session;
 pub mod web;

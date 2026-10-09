@@ -1,6 +1,7 @@
 import type { Messages } from "./en";
 
 export const ja: Messages = {
+  tooManyRequests: "試行回数が多すぎます。しばらくしてからもう一度お試しください",
   connectionError: "接続エラー",
   delete: "削除",
   logout: "ログアウト",

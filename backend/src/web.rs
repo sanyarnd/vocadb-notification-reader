@@ -5,7 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use axum::extract::{FromRequest, FromRequestParts, Query, Request, State};
+use std::net::{IpAddr, SocketAddr};
+
+use axum::extract::{ConnectInfo, Extension, FromRequest, FromRequestParts, Query, Request, State};
 use axum::http::request::Parts;
 use axum::http::{HeaderValue, Method, header};
 use axum::middleware::{self, Next};
@@ -15,6 +17,7 @@ use axum::{Json, Router};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use futures::{StreamExt, TryStreamExt};
+use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -26,6 +29,7 @@ use crate::client::{Client, ClientError};
 use crate::config::Config;
 use crate::error::AppError;
 use crate::kv::Kv;
+use crate::rate_limit::{self, RateLimiter};
 use crate::service::dto::Notification;
 use crate::service::{Database, Source, load_notification_details};
 use crate::session::{Session, SessionStore};
@@ -53,14 +57,21 @@ struct Inner {
     cache: Cache,
     database_urls: HashMap<Database, String>,
     allowed_origins: Vec<String>,
+    trusted_proxies: Vec<IpNet>,
+    limiter: RateLimiter,
+}
+
+/// Settings of the HTTP layer.
+pub struct WebSettings {
+    pub database_urls: HashMap<Database, String>,
+    /// Origins allowed to call the API from browsers (besides the API's own origin).
+    pub allowed_origins: Vec<String>,
+    /// Reverse proxies whose `X-Forwarded-For` is trusted.
+    pub trusted_proxies: Vec<IpNet>,
 }
 
 impl AppState {
-    pub fn new(
-        kv: Kv,
-        database_urls: HashMap<Database, String>,
-        allowed_origins: Vec<String>,
-    ) -> anyhow::Result<Self> {
+    pub fn new(kv: Kv, settings: WebSettings) -> anyhow::Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(concat!(
                 env!("CARGO_PKG_NAME"),
@@ -76,9 +87,11 @@ impl AppState {
             inner: Arc::new(Inner {
                 http,
                 sessions: SessionStore::new(kv.clone()),
-                cache: Cache::new(kv),
-                database_urls,
-                allowed_origins,
+                cache: Cache::new(kv.clone()),
+                limiter: RateLimiter::new(kv),
+                database_urls: settings.database_urls,
+                allowed_origins: settings.allowed_origins,
+                trusted_proxies: settings.trusted_proxies,
             }),
         })
     }
@@ -106,7 +119,8 @@ pub fn router(state: AppState) -> Router {
             "/notifications",
             get(fetch_notifications).delete(delete_notifications),
         )
-        .route_layer(middleware::from_fn_with_state(state.clone(), check_origin));
+        .route_layer(middleware::from_fn_with_state(state.clone(), check_origin))
+        .layer(middleware::from_fn_with_state(state.clone(), limit_by_ip));
 
     Router::new()
         .route("/health", get(|| async { "OK" }))
@@ -124,8 +138,11 @@ pub async fn app(config: Config) -> anyhow::Result<Router> {
     };
     let state = AppState::new(
         kv,
-        config.database_urls,
-        config.cors_allowed_origins.clone(),
+        WebSettings {
+            database_urls: config.database_urls,
+            allowed_origins: config.cors_allowed_origins.clone(),
+            trusted_proxies: config.trusted_proxies,
+        },
     )?;
     let mut app = router(state).layer(TraceLayer::new_for_http());
 
@@ -146,6 +163,34 @@ pub async fn app(config: Config) -> anyhow::Result<Router> {
     }
 
     Ok(app)
+}
+
+/// Address of the client, resolved through trusted reverse proxies.
+#[derive(Clone, Copy, Debug)]
+pub struct ClientIp(pub IpAddr);
+
+/// Resolves the client address and applies the per address limit to every API request.
+async fn limit_by_ip(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    let ip = crate::client_ip::resolve(peer.ip(), request.headers(), &state.inner.trusted_proxies);
+    request.extensions_mut().insert(ClientIp(ip));
+
+    match state
+        .inner
+        .limiter
+        .check(rate_limit::PER_IP, &ip.to_string())
+        .await
+    {
+        Some(retry_after) => {
+            tracing::warn!("Rate limit exceeded by {ip}");
+            AppError::TooManyRequests(retry_after).into_response()
+        }
+        None => next.run(request).await,
+    }
 }
 
 /// CSRF protection: state changing requests from browsers must come from the API's own
@@ -212,6 +257,16 @@ impl FromRequestParts<AppState> for Authenticated {
             .get(&id)
             .await?
             .ok_or_else(|| AppError::Unauthorized("Session has ended".to_string()))?;
+
+        if let Some(retry_after) = state
+            .inner
+            .limiter
+            .check(rate_limit::PER_SESSION, &id)
+            .await
+        {
+            tracing::warn!("Rate limit exceeded by user {}", session.user_id);
+            return Err(AppError::TooManyRequests(retry_after));
+        }
 
         Ok(Authenticated { id, session })
     }
@@ -304,11 +359,33 @@ pub struct DeleteNotificationsRequest {
 
 async fn login(
     State(state): State<AppState>,
+    Extension(ClientIp(ip)): Extension<ClientIp>,
     jar: CookieJar,
     AppJson(payload): AppJson<LoginRequest>,
 ) -> Result<(CookieJar, Json<Account>)> {
+    let limiter = &state.inner.limiter;
+    let account = format!(
+        "{:?}:{}",
+        payload.database,
+        payload.username.trim().to_lowercase()
+    );
+    for (limit, subject) in [
+        (rate_limit::LOGIN_PER_IP, ip.to_string()),
+        (rate_limit::LOGIN_PER_ACCOUNT, account),
+    ] {
+        if let Some(retry_after) = limiter.check(limit, &subject).await {
+            tracing::warn!("Too many login attempts for {} from {ip}", payload.username);
+            return Err(AppError::TooManyRequests(retry_after));
+        }
+    }
+
     let client = state.client(payload.database, None)?;
-    client.login(&payload.username, &payload.password).await?;
+    if let Err(e) = client.login(&payload.username, &payload.password).await {
+        if matches!(e, ClientError::BadCredentials) {
+            tracing::info!("Failed login of {} from {ip}", payload.username);
+        }
+        return Err(e.into());
+    }
     let user = client.current_user().await?;
 
     let session = Session {

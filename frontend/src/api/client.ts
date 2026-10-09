@@ -63,3 +63,7 @@ export type Api = ReturnType<typeof createApi>;
 export function isUnauthorized(error: unknown): boolean {
   return axios.isAxiosError(error) && error.response?.status === 401;
 }
+
+export function isRateLimited(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 429;
+}

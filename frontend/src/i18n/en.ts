@@ -1,4 +1,5 @@
 export const en = {
+  tooManyRequests: "Too many attempts, try again later",
   connectionError: "Connection error",
   delete: "Delete",
   logout: "Logout",

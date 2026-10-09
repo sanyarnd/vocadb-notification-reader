@@ -1,6 +1,7 @@
 import type { Messages } from "./en";
 
 export const ru: Messages = {
+  tooManyRequests: "Слишком много попыток, попробуйте позже",
   connectionError: "Ошибка соединения",
   delete: "Удалить",
   logout: "Выйти",
